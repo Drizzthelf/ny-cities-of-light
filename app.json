@@ -13,7 +13,11 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "QR Meetup uses the camera to scan other people's QR codes.",
+        "NSPhotoLibraryUsageDescription": "QR Meetup needs photo library access so you can pick a profile photo."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -21,10 +25,25 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": ["android.permission.CAMERA"]
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow QR Meetup to access the camera to scan QR codes."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow QR Meetup to access your photos to set a profile picture."
+        }
+      ]
+    ]
   }
 }
