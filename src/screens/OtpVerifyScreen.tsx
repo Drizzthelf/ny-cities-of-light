@@ -11,11 +11,11 @@ import {
 import { supabase } from '../lib/supabase';
 
 type Props = {
-  phone: string;
+  email: string;
   onBack: () => void;
 };
 
-export function OtpVerifyScreen({ phone, onBack }: Props) {
+export function OtpVerifyScreen({ email, onBack }: Props) {
   const [code, setCode] = useState('');
   const [verifying, setVerifying] = useState(false);
 
@@ -25,7 +25,7 @@ export function OtpVerifyScreen({ phone, onBack }: Props) {
       return;
     }
     setVerifying(true);
-    const { error } = await supabase.auth.verifyOtp({ phone, token: code, type: 'sms' });
+    const { error } = await supabase.auth.verifyOtp({ email, token: code, type: 'email' });
     setVerifying(false);
     if (error) {
       Alert.alert('Verification failed', error.message);
@@ -40,7 +40,7 @@ export function OtpVerifyScreen({ phone, onBack }: Props) {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <Text style={styles.title}>Enter code</Text>
-      <Text style={styles.subtitle}>We sent a code to {phone}.</Text>
+      <Text style={styles.subtitle}>We sent a code to {email}.</Text>
       <TextInput
         style={styles.input}
         placeholder="123456"
@@ -59,7 +59,7 @@ export function OtpVerifyScreen({ phone, onBack }: Props) {
         <Text style={styles.buttonText}>{verifying ? 'Verifying...' : 'Verify'}</Text>
       </TouchableOpacity>
       <TouchableOpacity style={styles.linkButton} onPress={onBack} disabled={verifying}>
-        <Text style={styles.linkText}>Use a different number</Text>
+        <Text style={styles.linkText}>Use a different email</Text>
       </TouchableOpacity>
     </KeyboardAvoidingView>
   );

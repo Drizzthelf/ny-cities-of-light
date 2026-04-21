@@ -12,15 +12,21 @@ import {
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
-import type { Profile } from '../types/database';
+import type { Event, Profile } from '../types/database';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function formatTime(iso: string) {
+  return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
 
 export function ScannerScreen() {
   const { session } = useAuth();
   const [permission, requestPermission] = useCameraPermissions();
   const [scannedProfile, setScannedProfile] = useState<Profile | null>(null);
   const [alreadyConnected, setAlreadyConnected] = useState(false);
+  const [scannedEvent, setScannedEvent] = useState<Event | null>(null);
+  const [alreadyCheckedIn, setAlreadyCheckedIn] = useState(false);
   const [loading, setLoading] = useState(false);
   const [adding, setAdding] = useState(false);
   const lockRef = useRef(false);
@@ -34,6 +40,43 @@ export function ScannerScreen() {
   async function handleBarCode({ data }: { data: string }) {
     if (lockRef.current) return;
     const code = data.trim();
+
+    if (code.startsWith('event:')) {
+      const eventId = code.slice(6);
+      if (!UUID_RE.test(eventId)) return;
+      lockRef.current = true;
+      setLoading(true);
+      try {
+        const { data: event, error } = await supabase
+          .from('events')
+          .select('*')
+          .eq('id', eventId)
+          .maybeSingle();
+        if (error) throw error;
+        if (!event) {
+          Alert.alert('Not found', 'No event for that code.', [
+            { text: 'OK', onPress: () => (lockRef.current = false) },
+          ]);
+          return;
+        }
+        const { data: existing } = await supabase
+          .from('event_checkins')
+          .select('id')
+          .eq('user_id', session!.user.id)
+          .eq('event_id', eventId)
+          .maybeSingle();
+        setAlreadyCheckedIn(!!existing);
+        setScannedEvent(event as Event);
+      } catch (err: any) {
+        Alert.alert('Error', err.message ?? String(err), [
+          { text: 'OK', onPress: () => (lockRef.current = false) },
+        ]);
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
     if (!UUID_RE.test(code)) return;
     if (!session?.user || code === session.user.id) {
       lockRef.current = true;
@@ -74,7 +117,7 @@ export function ScannerScreen() {
     }
   }
 
-  async function handleAdd() {
+  async function handleAddContact() {
     if (!scannedProfile || !session?.user) return;
     setAdding(true);
     const { error } = await supabase.from('scans').insert({
@@ -89,12 +132,27 @@ export function ScannerScreen() {
     closeModal();
   }
 
+  async function handleEventCheckin() {
+    if (!scannedEvent || !session?.user) return;
+    setAdding(true);
+    const { error } = await supabase.from('event_checkins').insert({
+      user_id: session.user.id,
+      event_id: scannedEvent.id,
+    });
+    setAdding(false);
+    if (error && !error.message.includes('duplicate')) {
+      Alert.alert('Could not check in', error.message);
+      return;
+    }
+    closeModal();
+  }
+
   function closeModal() {
     setScannedProfile(null);
     setAlreadyConnected(false);
-    setTimeout(() => {
-      lockRef.current = false;
-    }, 500);
+    setScannedEvent(null);
+    setAlreadyCheckedIn(false);
+    setTimeout(() => { lockRef.current = false; }, 500);
   }
 
   if (!permission) return <ActivityIndicator style={{ flex: 1 }} />;
@@ -128,6 +186,7 @@ export function ScannerScreen() {
         </View>
       )}
 
+      {/* Person scan modal */}
       <Modal
         visible={!!scannedProfile}
         transparent
@@ -152,16 +211,61 @@ export function ScannerScreen() {
                 {scannedProfile.background ? (
                   <Text style={styles.modalBackground}>{scannedProfile.background}</Text>
                 ) : null}
+                <Text style={styles.pointsHint}>+10 pts for connecting</Text>
                 {alreadyConnected && (
                   <Text style={styles.alreadyText}>Already in your contacts</Text>
                 )}
                 <TouchableOpacity
-                  style={[styles.button, adding && styles.buttonDisabled]}
-                  onPress={handleAdd}
+                  style={[styles.button, (adding || alreadyConnected) && styles.buttonDisabled]}
+                  onPress={handleAddContact}
                   disabled={adding || alreadyConnected}
                 >
                   <Text style={styles.buttonText}>
                     {alreadyConnected ? 'Already added' : adding ? 'Adding...' : 'Add to contacts'}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.linkButton} onPress={closeModal}>
+                  <Text style={styles.linkText}>Cancel</Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* Event check-in modal */}
+      <Modal
+        visible={!!scannedEvent}
+        transparent
+        animationType="slide"
+        onRequestClose={closeModal}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            {scannedEvent && (
+              <>
+                <View style={styles.eventBadge}>
+                  <Text style={styles.eventBadgeText}>Event</Text>
+                </View>
+                <Text style={styles.modalName}>{scannedEvent.title}</Text>
+                <Text style={styles.modalMeta}>
+                  {formatTime(scannedEvent.start_time)} – {formatTime(scannedEvent.end_time)}
+                </Text>
+                <Text style={styles.modalMeta}>{scannedEvent.location_name}</Text>
+                {scannedEvent.description ? (
+                  <Text style={styles.modalBackground}>{scannedEvent.description}</Text>
+                ) : null}
+                <Text style={styles.pointsHint}>+30 pts for checking in</Text>
+                {alreadyCheckedIn && (
+                  <Text style={styles.alreadyText}>Already checked in</Text>
+                )}
+                <TouchableOpacity
+                  style={[styles.button, (adding || alreadyCheckedIn) && styles.buttonDisabled]}
+                  onPress={handleEventCheckin}
+                  disabled={adding || alreadyCheckedIn}
+                >
+                  <Text style={styles.buttonText}>
+                    {alreadyCheckedIn ? 'Already checked in' : adding ? 'Checking in...' : 'Check in (+30 pts)'}
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.linkButton} onPress={closeModal}>
@@ -205,11 +309,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: '#00000099',
-    justifyContent: 'flex-end',
-  },
+  modalBackdrop: { flex: 1, backgroundColor: '#00000099', justifyContent: 'flex-end' },
   modalCard: {
     backgroundColor: '#fff',
     padding: 24,
@@ -223,8 +323,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  modalName: { fontSize: 22, fontWeight: '700' },
-  modalMeta: { color: '#666', marginTop: 4 },
+  modalName: { fontSize: 22, fontWeight: '700', textAlign: 'center' },
+  modalMeta: { color: '#666', marginTop: 4, fontSize: 14 },
   modalBackground: {
     color: '#333',
     marginTop: 10,
@@ -232,7 +332,16 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 20,
   },
-  alreadyText: { color: '#b45309', marginTop: 12, fontSize: 13 },
+  pointsHint: { color: '#2563eb', fontWeight: '600', fontSize: 13, marginTop: 10 },
+  alreadyText: { color: '#b45309', marginTop: 8, fontSize: 13 },
+  eventBadge: {
+    backgroundColor: '#dbeafe',
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 4,
+    marginBottom: 10,
+  },
+  eventBadgeText: { color: '#2563eb', fontWeight: '700', fontSize: 13 },
   button: {
     backgroundColor: '#2563eb',
     padding: 14,

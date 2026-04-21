@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "qr-meetup",
-    "slug": "qr-meetup",
+    "name": "NY Cities of Light",
+    "slug": "ny-cities-of-light",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -15,8 +15,8 @@
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
-        "NSCameraUsageDescription": "QR Meetup uses the camera to scan other people's QR codes.",
-        "NSPhotoLibraryUsageDescription": "QR Meetup needs photo library access so you can pick a profile photo."
+        "NSCameraUsageDescription": "NY Cities of Light uses the camera to scan QR codes.",
+        "NSPhotoLibraryUsageDescription": "NY Cities of Light needs photo library access so you can pick a profile photo."
       }
     },
     "android": {

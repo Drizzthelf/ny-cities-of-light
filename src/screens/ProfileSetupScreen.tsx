@@ -77,7 +77,7 @@ export function ProfileSetupScreen({ mode = 'create' }: Props) {
         background: background.trim() || null,
         hometown: hometown.trim() || null,
         photo_url: photoUrl,
-        phone: session.user.phone ?? null,
+        phone: session.user.email ?? null,
       };
       const { error } = await supabase.from('profiles').upsert(row);
       if (error) throw error;

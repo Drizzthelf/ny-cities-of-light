@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
-import { PhoneEntryScreen } from './PhoneEntryScreen';
+import { EmailEntryScreen } from './EmailEntryScreen';
 import { OtpVerifyScreen } from './OtpVerifyScreen';
 
 export function AuthFlow() {
-  const [phone, setPhone] = useState<string | null>(null);
+  const [email, setEmail] = useState<string | null>(null);
 
-  if (!phone) return <PhoneEntryScreen onCodeSent={setPhone} />;
-  return <OtpVerifyScreen phone={phone} onBack={() => setPhone(null)} />;
+  if (!email) return <EmailEntryScreen onCodeSent={setEmail} />;
+  return <OtpVerifyScreen email={email} onBack={() => setEmail(null)} />;
 }
