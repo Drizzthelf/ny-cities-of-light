@@ -9,14 +9,24 @@ import { ProfileSetupScreen } from '../screens/ProfileSetupScreen';
 import { HomeScreen } from '../screens/HomeScreen';
 import { ScannerScreen } from '../screens/ScannerScreen';
 import { ContactsScreen } from '../screens/ContactsScreen';
+import { LeaderboardScreen } from '../screens/LeaderboardScreen';
+import { AnnouncementsScreen } from '../screens/AnnouncementsScreen';
 import { ScheduleScreen } from '../screens/ScheduleScreen';
 import { NavigateScreen } from '../screens/NavigateScreen';
-import { LeaderboardScreen } from '../screens/LeaderboardScreen';
 import { ServiceScreen } from '../screens/ServiceScreen';
 import { AdminScreen } from '../screens/AdminScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
+
+function ScheduleStack() {
+  return (
+    <Stack.Navigator>
+      <Stack.Screen name="ScheduleMain" component={ScheduleScreen} options={{ title: 'Conference Schedule' }} />
+      <Stack.Screen name="Venues" component={NavigateScreen} options={{ title: 'Venues' }} />
+    </Stack.Navigator>
+  );
+}
 
 function QRMeetupStack() {
   return (
@@ -31,6 +41,7 @@ function QRMeetupStack() {
       </Stack.Screen>
       <Stack.Screen name="Scan" component={ScannerScreen} options={{ title: 'Scan QR' }} />
       <Stack.Screen name="Contacts" component={ContactsScreen} options={{ title: 'My Contacts' }} />
+      <Stack.Screen name="Leaderboard" component={LeaderboardScreen} options={{ title: 'Leaderboard' }} />
     </Stack.Navigator>
   );
 }
@@ -40,24 +51,19 @@ function MainTabs() {
   return (
     <Tab.Navigator screenOptions={{ headerShown: true }}>
       <Tab.Screen
+        name="Updates"
+        component={AnnouncementsScreen}
+        options={{ tabBarLabel: 'Updates', headerShown: false }}
+      />
+      <Tab.Screen
         name="Schedule"
-        component={ScheduleScreen}
-        options={{ tabBarLabel: 'Schedule', title: 'Conference Schedule' }}
+        component={ScheduleStack}
+        options={{ headerShown: false, tabBarLabel: 'Schedule' }}
       />
       <Tab.Screen
         name="QRMeetup"
         component={QRMeetupStack}
         options={{ headerShown: false, tabBarLabel: 'QR Meetup' }}
-      />
-      <Tab.Screen
-        name="Navigate"
-        component={NavigateScreen}
-        options={{ tabBarLabel: 'Navigate', title: 'Venues' }}
-      />
-      <Tab.Screen
-        name="Leaderboard"
-        component={LeaderboardScreen}
-        options={{ tabBarLabel: 'Leaders', title: 'Leaderboard' }}
       />
       <Tab.Screen
         name="Help"

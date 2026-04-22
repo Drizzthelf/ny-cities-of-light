@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(gh repo *)",
-      "Bash(where gh *)"
+      "Bash(where gh *)",
+      "Bash(npx expo *)"
     ]
   }
 }

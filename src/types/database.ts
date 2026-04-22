@@ -44,6 +44,14 @@ export type ServiceRequest = {
   created_at: string;
 };
 
+export type Announcement = {
+  id: string;
+  admin_id: string | null;
+  title: string;
+  body: string;
+  created_at: string;
+};
+
 export type LeaderboardRow = {
   id: string;
   full_name: string;

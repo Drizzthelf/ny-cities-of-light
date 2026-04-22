@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { RefreshControl, SectionList, StyleSheet, Text, View } from 'react-native';
+import { Alert, Linking, Platform, RefreshControl, SectionList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
 import type { Event } from '../types/database';
 
@@ -10,8 +11,25 @@ function formatTime(iso: string) {
 }
 
 function dateKey(iso: string) {
-  const d = new Date(iso);
-  return d.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' });
+  return new Date(iso).toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' });
+}
+
+function openMaps(address: string) {
+  const q = encodeURIComponent(address);
+  const googleMaps = () =>
+    Linking.openURL(`comgooglemaps://?q=${q}`).catch(() =>
+      Linking.openURL(`https://maps.google.com/maps?q=${q}`)
+    );
+
+  if (Platform.OS === 'ios') {
+    Alert.alert('Open in Maps', undefined, [
+      { text: 'Apple Maps', onPress: () => Linking.openURL(`maps:0,0?q=${q}`) },
+      { text: 'Google Maps', onPress: googleMaps },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  } else {
+    googleMaps();
+  }
 }
 
 export function ScheduleScreen() {
@@ -33,7 +51,15 @@ export function ScheduleScreen() {
     setSections(Object.entries(grouped).map(([title, data]) => ({ title, data })));
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useFocusEffect(useCallback(() => { load(); }, [load]));
+
+  useEffect(() => {
+    const channel = supabase
+      .channel('schedule-events')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'events' }, load)
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [load]);
 
   async function onRefresh() {
     setRefreshing(true);
@@ -67,6 +93,9 @@ export function ScheduleScreen() {
             {item.description ? (
               <Text style={styles.desc} numberOfLines={3}>{item.description}</Text>
             ) : null}
+            <TouchableOpacity onPress={() => openMaps(item.address)}>
+              <Text style={styles.mapsLink}>Open in Maps</Text>
+            </TouchableOpacity>
           </View>
         </View>
       )}
@@ -104,4 +133,5 @@ const styles = StyleSheet.create({
   eventTitle: { fontSize: 15, fontWeight: '600', color: '#1e293b' },
   location: { fontSize: 12, color: '#2563eb', marginTop: 3 },
   desc: { fontSize: 13, color: '#64748b', marginTop: 5, lineHeight: 18 },
+  mapsLink: { fontSize: 12, color: '#2563eb', marginTop: 6, fontWeight: '600' },
 });

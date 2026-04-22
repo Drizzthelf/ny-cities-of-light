@@ -1,5 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
+  Alert,
   FlatList,
   Linking,
   Platform,
@@ -19,10 +21,20 @@ type Venue = {
 
 function openMaps(address: string) {
   const q = encodeURIComponent(address);
-  const url = Platform.OS === 'ios' ? `maps:0,0?q=${q}` : `geo:0,0?q=${q}`;
-  Linking.openURL(url).catch(() =>
-    Linking.openURL(`https://maps.google.com/maps?q=${q}`)
-  );
+  const googleMaps = () =>
+    Linking.openURL(`comgooglemaps://?q=${q}`).catch(() =>
+      Linking.openURL(`https://maps.google.com/maps?q=${q}`)
+    );
+
+  if (Platform.OS === 'ios') {
+    Alert.alert('Open in Maps', undefined, [
+      { text: 'Apple Maps', onPress: () => Linking.openURL(`maps:0,0?q=${q}`) },
+      { text: 'Google Maps', onPress: googleMaps },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  } else {
+    googleMaps();
+  }
 }
 
 export function NavigateScreen() {
@@ -47,7 +59,15 @@ export function NavigateScreen() {
     setVenues(Object.values(map));
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useFocusEffect(useCallback(() => { load(); }, [load]));
+
+  useEffect(() => {
+    const channel = supabase
+      .channel('navigate-events')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'events' }, load)
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [load]);
 
   async function onRefresh() {
     setRefreshing(true);

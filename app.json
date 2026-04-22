@@ -26,7 +26,9 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "permissions": ["android.permission.CAMERA"]
+      "permissions": [
+        "android.permission.CAMERA"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -43,7 +45,8 @@
         {
           "photosPermission": "Allow QR Meetup to access your photos to set a profile picture."
         }
-      ]
+      ],
+      "@react-native-community/datetimepicker"
     ]
   }
 }

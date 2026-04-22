@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import QRCode from 'react-native-qrcode-svg';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
@@ -49,7 +50,7 @@ export function HomeScreen({ onEditProfile }: Props) {
       : null;
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       <Text style={styles.greeting}>Hi, {profile.full_name.split(' ')[0]}</Text>
 
       <View style={styles.qrBox}>
@@ -82,6 +83,10 @@ export function HomeScreen({ onEditProfile }: Props) {
           <Text style={[styles.actionButtonText, styles.actionButtonTextSecondary]}>My Contacts</Text>
         </TouchableOpacity>
       </View>
+      <TouchableOpacity style={styles.leaderboardButton} onPress={() => navigation.navigate('Leaderboard')}>
+        <Text style={styles.leaderboardButtonText}>Leaderboard</Text>
+        <Text style={styles.leaderboardArrow}>›</Text>
+      </TouchableOpacity>
 
       <TouchableOpacity style={styles.editButton} onPress={onEditProfile}>
         <Text style={styles.editButtonText}>Edit profile</Text>
@@ -89,7 +94,7 @@ export function HomeScreen({ onEditProfile }: Props) {
       <TouchableOpacity style={styles.linkButton} onPress={signOut}>
         <Text style={styles.linkText}>Sign out</Text>
       </TouchableOpacity>
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -130,6 +135,21 @@ const styles = StyleSheet.create({
   actionButtonSecondary: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#2563eb' },
   actionButtonText: { color: '#fff', fontWeight: '600', fontSize: 15 },
   actionButtonTextSecondary: { color: '#2563eb' },
+  leaderboardButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    alignSelf: 'stretch',
+    marginTop: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    backgroundColor: '#f0f6ff',
+    borderWidth: 1,
+    borderColor: '#dbeafe',
+  },
+  leaderboardButtonText: { color: '#2563eb', fontWeight: '600', fontSize: 15 },
+  leaderboardArrow: { fontSize: 20, color: '#2563eb' },
   editButton: {
     marginTop: 20,
     paddingVertical: 11,
