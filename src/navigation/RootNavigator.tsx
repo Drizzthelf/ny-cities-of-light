@@ -1,11 +1,14 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { ActivityIndicator, View } from 'react-native';
-import { NavigationContainer } from '@react-navigation/native';
+import { DefaultTheme, NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 import { AuthFlow } from '../screens/AuthFlow';
 import { ProfileSetupScreen } from '../screens/ProfileSetupScreen';
+import { ProfileScreen } from '../screens/ProfileScreen';
 import { HomeScreen } from '../screens/HomeScreen';
 import { ScannerScreen } from '../screens/ScannerScreen';
 import { ContactsScreen } from '../screens/ContactsScreen';
@@ -13,8 +16,14 @@ import { LeaderboardScreen } from '../screens/LeaderboardScreen';
 import { AnnouncementsScreen } from '../screens/AnnouncementsScreen';
 import { ScheduleScreen } from '../screens/ScheduleScreen';
 import { NavigateScreen } from '../screens/NavigateScreen';
-import { ServiceScreen } from '../screens/ServiceScreen';
+import { RaffleScreen } from '../screens/RaffleScreen';
+import { CompletedRaffleScreen } from '../screens/CompletedRaffleScreen';
 import { AdminScreen } from '../screens/AdminScreen';
+import { SettingsScreen } from '../screens/SettingsScreen';
+import { PrivacyPolicyScreen } from '../screens/PrivacyPolicyScreen';
+import { IncomingConnectionRequestListener } from '../components/IncomingConnectionRequestListener';
+import { RaffleWinListener } from '../components/RaffleWinListener';
+import { PushNotificationRegistrar } from '../components/PushNotificationRegistrar';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -22,8 +31,8 @@ const Stack = createNativeStackNavigator();
 function ScheduleStack() {
   return (
     <Stack.Navigator>
-      <Stack.Screen name="ScheduleMain" component={ScheduleScreen} options={{ title: 'Conference Schedule' }} />
-      <Stack.Screen name="Venues" component={NavigateScreen} options={{ title: 'Venues' }} />
+      <Stack.Screen name="ScheduleMain" component={ScheduleScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="Venues" component={NavigateScreen} options={{ headerShown: false }} />
     </Stack.Navigator>
   );
 }
@@ -31,75 +40,203 @@ function ScheduleStack() {
 function QRMeetupStack() {
   return (
     <Stack.Navigator>
-      <Stack.Screen name="QRHome" options={{ headerShown: false }}>
+      <Stack.Screen name="QRHome" component={HomeScreen} options={{ headerShown: false, title: 'QR Home' }} />
+      <Stack.Screen name="Scan" component={ScannerScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="Contacts" component={ContactsScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="Leaderboard" component={LeaderboardScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="Raffle" component={RaffleScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="CompletedRaffle" component={CompletedRaffleScreen} options={{ headerShown: false }} />
+    </Stack.Navigator>
+  );
+}
+
+function ProfileStack() {
+  return (
+    <Stack.Navigator>
+      <Stack.Screen name="ProfileMain" options={{ headerShown: false }}>
         {({ navigation }) => (
-          <HomeScreen onEditProfile={() => navigation.navigate('EditProfile')} />
+          <ProfileScreen
+            onViewContacts={() => navigation.navigate('QRMeetup', { screen: 'Contacts' })}
+          />
         )}
       </Stack.Screen>
-      <Stack.Screen name="EditProfile" options={{ title: 'Edit profile' }}>
-        {() => <ProfileSetupScreen mode="edit" />}
+      <Stack.Screen name="EditProfile" options={{ headerShown: false }}>
+        {({ navigation }) => <ProfileSetupScreen mode="edit" onSaved={() => navigation.goBack()} />}
       </Stack.Screen>
-      <Stack.Screen name="Scan" component={ScannerScreen} options={{ title: 'Scan QR' }} />
-      <Stack.Screen name="Contacts" component={ContactsScreen} options={{ title: 'My Contacts' }} />
-      <Stack.Screen name="Leaderboard" component={LeaderboardScreen} options={{ title: 'Leaderboard' }} />
+    </Stack.Navigator>
+  );
+}
+
+function SettingsStack() {
+  return (
+    <Stack.Navigator>
+      <Stack.Screen name="SettingsMain" component={SettingsScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} options={{ headerShown: false }} />
     </Stack.Navigator>
   );
 }
 
 function MainTabs() {
   const { profile } = useAuth();
+  const { colors } = useTheme();
+  // A thin left border on every tab but the first turns into a divider
+  // line between each pair of tabs, without a stray line on the outer
+  // edges.
+  const dividedTabItem = useMemo(() => ({ borderLeftWidth: 1, borderLeftColor: colors.border }), [colors]);
+
   return (
-    <Tab.Navigator screenOptions={{ headerShown: true }}>
+    <Tab.Navigator
+      initialRouteName="Profile"
+      screenOptions={{
+        headerShown: true,
+        tabBarActiveTintColor: colors.primary,
+        tabBarInactiveTintColor: colors.textFaint,
+        // panelDark, not colors.text — this bar is deliberately black in
+        // both light and dark mode, not "page text color" that happens to
+        // be black in light mode.
+        tabBarStyle: { backgroundColor: colors.panelDark, borderTopColor: colors.border },
+      }}
+    >
+      <Tab.Screen
+        name="Profile"
+        component={ProfileStack}
+        options={{
+          headerShown: false,
+          tabBarLabel: 'Profile',
+          tabBarIcon: ({ color, size, focused }) => (
+            <Ionicons name={focused ? 'person' : 'person-outline'} size={size} color={color} />
+          ),
+        }}
+      />
       <Tab.Screen
         name="Updates"
         component={AnnouncementsScreen}
-        options={{ tabBarLabel: 'Updates', headerShown: false }}
-      />
-      <Tab.Screen
-        name="Schedule"
-        component={ScheduleStack}
-        options={{ headerShown: false, tabBarLabel: 'Schedule' }}
+        options={{
+          tabBarLabel: 'Updates',
+          headerShown: false,
+          tabBarItemStyle: dividedTabItem,
+          tabBarIcon: ({ color, size, focused }) => (
+            <Ionicons name={focused ? 'megaphone' : 'megaphone-outline'} size={size} color={color} />
+          ),
+        }}
       />
       <Tab.Screen
         name="QRMeetup"
         component={QRMeetupStack}
-        options={{ headerShown: false, tabBarLabel: 'QR Meetup' }}
+        options={{
+          headerShown: false,
+          tabBarLabel: 'QR Meetup',
+          tabBarItemStyle: dividedTabItem,
+          tabBarIcon: ({ color, size, focused }) => (
+            <Ionicons name={focused ? 'qr-code' : 'qr-code-outline'} size={size} color={color} />
+          ),
+        }}
+        listeners={({ navigation }) => ({
+          tabPress: (e) => {
+            // Cross-tab links (e.g. Profile's "My Contacts" button) push
+            // Contacts/Scan/Leaderboard onto this stack. Without this, once
+            // pushed, tapping the QR Meetup tab icon leaves you stranded on
+            // whatever sub-screen you last visited instead of Home, since
+            // React Navigation doesn't reset a tab's stack on tab press by
+            // default. preventDefault stops the default tab-press action
+            // from also running alongside this navigate — without it the
+            // two fought each other and made repeated taps toggle between
+            // Home and Contacts instead of settling on Home.
+            e.preventDefault();
+            navigation.navigate('QRMeetup', { screen: 'QRHome' });
+          },
+        })}
       />
       <Tab.Screen
-        name="Help"
-        component={ServiceScreen}
-        options={{ tabBarLabel: 'Help', title: 'Ask the Team' }}
+        name="Schedule"
+        component={ScheduleStack}
+        options={{
+          headerShown: false,
+          tabBarLabel: 'Schedule',
+          tabBarItemStyle: dividedTabItem,
+          tabBarIcon: ({ color, size, focused }) => (
+            <Ionicons name={focused ? 'calendar' : 'calendar-outline'} size={size} color={color} />
+          ),
+        }}
       />
       {profile?.is_admin && (
         <Tab.Screen
           name="Admin"
           component={AdminScreen}
-          options={{ tabBarLabel: 'Admin', title: 'Admin' }}
+          options={{
+            tabBarLabel: 'Admin',
+            title: 'Admin',
+            headerShown: false,
+            tabBarItemStyle: dividedTabItem,
+            tabBarIcon: ({ color, size, focused }) => (
+              <Ionicons name={focused ? 'shield-checkmark' : 'shield-checkmark-outline'} size={size} color={color} />
+            ),
+          }}
         />
       )}
+      {/* Always last, admin or not — placed after the conditional Admin
+          tab rather than before it so it stays the rightmost tab either
+          way. */}
+      <Tab.Screen
+        name="Settings"
+        component={SettingsStack}
+        options={{
+          headerShown: false,
+          tabBarLabel: 'Settings',
+          tabBarItemStyle: dividedTabItem,
+          tabBarIcon: ({ color, size, focused }) => (
+            <Ionicons name={focused ? 'settings' : 'settings-outline'} size={size} color={color} />
+          ),
+        }}
+      />
     </Tab.Navigator>
   );
 }
 
 export function RootNavigator() {
   const { session, profile, loading } = useAuth();
+  const { colors } = useTheme();
+
+  // So any screen transition, default header, or the brief flash behind a
+  // modal reflects the current mode's palette instead of React
+  // Navigation's stock iOS blue/white — recomputed whenever night mode
+  // toggles, not a fixed value.
+  const navTheme = useMemo(
+    () => ({
+      ...DefaultTheme,
+      colors: {
+        ...DefaultTheme.colors,
+        primary: colors.primary,
+        background: colors.background,
+        card: colors.surface,
+        text: colors.text,
+        border: colors.border,
+      },
+    }),
+    [colors]
+  );
 
   if (loading) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center' }}>
-        <ActivityIndicator size="large" />
+      <View style={{ flex: 1, justifyContent: 'center', backgroundColor: colors.background }}>
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
 
   return (
-    <NavigationContainer>
+    <NavigationContainer theme={navTheme}>
       {!session ? (
         <AuthFlow />
       ) : !profile ? (
         <ProfileSetupScreen mode="create" />
       ) : (
-        <MainTabs />
+        <>
+          <MainTabs />
+          <IncomingConnectionRequestListener />
+          <RaffleWinListener />
+          <PushNotificationRegistrar />
+        </>
       )}
     </NavigationContainer>
   );

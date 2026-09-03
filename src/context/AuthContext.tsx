@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
+import { AppState } from 'react-native';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import type { Profile } from '../types/database';
@@ -9,6 +10,14 @@ type AuthState = {
   loading: boolean;
   refreshProfile: () => Promise<void>;
   signOut: () => Promise<void>;
+  deleteAccount: () => Promise<{ error: string | null }>;
+  // Registration code verified on the pre-auth screen (see AuthFlow), carried
+  // across the auth boundary so ProfileSetupScreen doesn't have to ask for it
+  // again. Cleared once consumed. If a session exists but this is null (e.g.
+  // the user verified OTP, then force-quit before finishing their profile),
+  // ProfileSetupScreen falls back to asking for the code itself.
+  pendingRegistrationCode: string | null;
+  setPendingRegistrationCode: (code: string | null) => void;
 };
 
 const AuthContext = createContext<AuthState | undefined>(undefined);
@@ -17,11 +26,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [pendingRegistrationCode, setPendingRegistrationCode] = useState<string | null>(null);
 
   async function loadProfile(userId: string) {
     const { data } = await supabase
       .from('profiles')
-      .select('*')
+      .select('*, profile_socials(*)')
       .eq('id', userId)
       .maybeSingle();
     setProfile((data as Profile | null) ?? null);
@@ -46,9 +56,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     });
 
+    // Supabase's own auto-refresh timer is throttled while the app is
+    // backgrounded on iOS/Android. Without this, a session left backgrounded
+    // over a multi-day conference can present a stale/expired token on
+    // resume. Recommended pattern from Supabase's React Native guide.
+    const appStateSub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        supabase.auth.startAutoRefresh();
+      } else {
+        supabase.auth.stopAutoRefresh();
+      }
+    });
+
     return () => {
       mounted = false;
       sub.subscription.unsubscribe();
+      appStateSub.remove();
     };
   }, []);
 
@@ -58,10 +81,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   async function signOut() {
     await supabase.auth.signOut();
+    setPendingRegistrationCode(null);
+  }
+
+  async function deleteAccount(): Promise<{ error: string | null }> {
+    const { data, error } = await supabase.functions.invoke('delete-account');
+    if (error) {
+      return { error: error.message };
+    }
+    if (data?.error) {
+      return { error: data.error };
+    }
+    // The Edge Function already deleted the underlying auth.users row —
+    // this just clears the now-orphaned local session/token immediately
+    // instead of waiting for it to fail naturally on the next API call.
+    await supabase.auth.signOut();
+    return { error: null };
   }
 
   return (
-    <AuthContext.Provider value={{ session, profile, loading, refreshProfile, signOut }}>
+    <AuthContext.Provider
+      value={{
+        session,
+        profile,
+        loading,
+        refreshProfile,
+        signOut,
+        deleteAccount,
+        pendingRegistrationCode,
+        setPendingRegistrationCode,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );
