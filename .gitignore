@@ -30,9 +30,15 @@ yarn-error.*
 .DS_Store
 *.pem
 
-# local env files
+# IDE
+.idea/
+
+# local env files — ignore every .env variant except the committed .example
+# templates (catches things like .env.remote.backup too, not just the two
+# names we happened to think of)
 .env
-.env*.local
+.env.*
+!.env.*.example
 
 # personal notes / secrets (never commit)
 variable.txt

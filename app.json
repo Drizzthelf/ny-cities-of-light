@@ -16,8 +16,10 @@
       "supportsTablet": true,
       "infoPlist": {
         "NSCameraUsageDescription": "NY Cities of Light uses the camera to scan QR codes.",
-        "NSPhotoLibraryUsageDescription": "NY Cities of Light needs photo library access so you can pick a profile photo."
-      }
+        "NSPhotoLibraryUsageDescription": "NY Cities of Light needs photo library access so you can pick a profile photo.",
+        "ITSAppUsesNonExemptEncryption": false
+      },
+      "bundleIdentifier": "com.ja123yu.nycitiesoflight"
     },
     "android": {
       "adaptiveIcon": {
@@ -28,7 +30,8 @@
       "predictiveBackGestureEnabled": false,
       "permissions": [
         "android.permission.CAMERA"
-      ]
+      ],
+      "package": "com.ja123yu.nycitiesoflight"
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -37,7 +40,8 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Allow QR Meetup to access the camera to scan QR codes."
+          "cameraPermission": "Allow QR Meetup to access the camera to scan QR codes.",
+          "recordAudioAndroid": false
         }
       ],
       [
@@ -46,7 +50,15 @@
           "photosPermission": "Allow QR Meetup to access your photos to set a profile picture."
         }
       ],
-      "@react-native-community/datetimepicker"
-    ]
+      "@react-native-community/datetimepicker",
+      "expo-notifications",
+      "expo-font"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "1ff5fb9d-6c5a-4005-b237-d0c610359312"
+      }
+    },
+    "owner": "ja123yu"
   }
 }
