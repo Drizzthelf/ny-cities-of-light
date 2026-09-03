@@ -1,14 +1,15 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, Linking, Platform, RefreshControl, SectionList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
+import { useTheme } from '../context/ThemeContext';
+import { EventRow } from '../components/EventRow';
+import { EventDetailModal } from '../components/EventDetailModal';
 import type { Event } from '../types/database';
+import { fonts, type ColorScheme } from '../theme';
 
 type Section = { title: string; data: Event[] };
-
-function formatTime(iso: string) {
-  return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-}
 
 function dateKey(iso: string) {
   return new Date(iso).toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' });
@@ -33,8 +34,13 @@ function openMaps(address: string) {
 }
 
 export function ScheduleScreen() {
+  const navigation = useNavigation<any>();
+  const { top } = useSafeAreaInsets();
+  const { colors } = useTheme();
+  const styles = useMemo(() => getStyles(colors), [colors]);
   const [sections, setSections] = useState<Section[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
 
   const load = useCallback(async () => {
     const { data } = await supabase
@@ -54,6 +60,13 @@ export function ScheduleScreen() {
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
   useEffect(() => {
+    // See HomeScreen.tsx's double-points-windows effect for why this guard
+    // exists — a fast unmount/remount can hand back an already-subscribed
+    // channel of the same topic, and calling .on() on it throws.
+    supabase
+      .getChannels()
+      .filter((c) => c.topic === 'realtime:schedule-events')
+      .forEach((c) => supabase.removeChannel(c));
     const channel = supabase
       .channel('schedule-events')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'events' }, load)
@@ -68,70 +81,96 @@ export function ScheduleScreen() {
   }
 
   return (
-    <SectionList
-      style={styles.container}
-      contentContainerStyle={styles.content}
-      sections={sections}
-      keyExtractor={(item) => item.id}
-      stickySectionHeadersEnabled
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-      ListEmptyComponent={<Text style={styles.empty}>No events scheduled yet.</Text>}
-      renderSectionHeader={({ section }) => (
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>{section.title}</Text>
-        </View>
-      )}
-      renderItem={({ item }) => (
-        <View style={styles.card}>
-          <View style={styles.timeCol}>
-            <Text style={styles.timeStart}>{formatTime(item.start_time)}</Text>
-            <Text style={styles.timeEnd}>{formatTime(item.end_time)}</Text>
-          </View>
-          <View style={styles.cardBody}>
-            <Text style={styles.eventTitle}>{item.title}</Text>
-            <Text style={styles.location}>{item.location_name}</Text>
-            {item.description ? (
-              <Text style={styles.desc} numberOfLines={3}>{item.description}</Text>
-            ) : null}
-            <TouchableOpacity onPress={() => openMaps(item.address)}>
-              <Text style={styles.mapsLink}>Open in Maps</Text>
+    <>
+      <SectionList
+        style={styles.container}
+        contentContainerStyle={styles.content}
+        sections={sections}
+        keyExtractor={(item) => item.id}
+        stickySectionHeadersEnabled
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        ListEmptyComponent={<Text style={styles.empty}>No events scheduled yet.</Text>}
+        ListHeaderComponent={
+          <>
+            <View style={[styles.header, { paddingTop: top - 2 }]}>
+              <Text style={styles.headerTitle}>Schedule</Text>
+              <Text style={styles.headerQuote}>
+                "To every thing there is a season, and a time to every purpose under the heaven."
+              </Text>
+              <Text style={styles.headerCitation}>— Ecclesiastes 3:1</Text>
+            </View>
+            <TouchableOpacity style={styles.venuesButton} onPress={() => navigation.navigate('Venues')}>
+              <Text style={styles.venuesButtonText}>View all venues</Text>
+              <Text style={styles.venuesButtonArrow}>›</Text>
             </TouchableOpacity>
+          </>
+        }
+        renderSectionHeader={({ section }) => (
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>{section.title}</Text>
           </View>
-        </View>
-      )}
-    />
+        )}
+        renderItem={({ item }) => (
+          <EventRow
+            event={item}
+            onOpenMaps={() => openMaps(item.address)}
+            onPress={() => setSelectedEvent(item)}
+          />
+        )}
+      />
+      <EventDetailModal
+        event={selectedEvent}
+        onClose={() => setSelectedEvent(null)}
+        onOpenMaps={selectedEvent ? () => openMaps(selectedEvent.address) : undefined}
+      />
+    </>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff' },
-  content: { paddingBottom: 32 },
-  empty: { textAlign: 'center', marginTop: 60, color: '#777', fontSize: 15 },
-  sectionHeader: {
-    backgroundColor: '#eef2ff',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-  },
-  sectionTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#2563eb',
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
-  },
-  card: {
-    flexDirection: 'row',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-  },
-  timeCol: { width: 62, marginRight: 12, alignItems: 'flex-end' },
-  timeStart: { fontSize: 13, fontWeight: '700', color: '#1e293b' },
-  timeEnd: { fontSize: 11, color: '#94a3b8', marginTop: 2 },
-  cardBody: { flex: 1 },
-  eventTitle: { fontSize: 15, fontWeight: '600', color: '#1e293b' },
-  location: { fontSize: 12, color: '#2563eb', marginTop: 3 },
-  desc: { fontSize: 13, color: '#64748b', marginTop: 5, lineHeight: 18 },
-  mapsLink: { fontSize: 12, color: '#2563eb', marginTop: 6, fontWeight: '600' },
-});
+function getStyles(colors: ColorScheme) {
+  return StyleSheet.create({
+    container: { flex: 1, backgroundColor: colors.background },
+    content: { paddingBottom: 32 },
+    empty: { textAlign: 'center', marginTop: 60, color: colors.textFaint, fontSize: 15 },
+    header: {
+      // panelDark, not colors.text — this header is deliberately black in
+      // both modes, not "page text color" that happens to be black in
+      // light mode.
+      backgroundColor: colors.panelDark,
+      paddingHorizontal: 20,
+      paddingBottom: 14,
+    },
+    headerTitle: { fontSize: 30, fontFamily: fonts.title, color: colors.textOnDark },
+    headerQuote: { fontSize: 13, color: '#c7c2b4', marginTop: 6, fontStyle: 'italic', lineHeight: 18 },
+    headerCitation: { fontSize: 12, color: '#9a9689', marginTop: 4 },
+    venuesButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginHorizontal: 16,
+      marginTop: 14,
+      marginBottom: 4,
+      paddingVertical: 12,
+      paddingHorizontal: 16,
+      borderRadius: 10,
+      // panelDark, not colors.text — same reasoning as `header` above.
+      backgroundColor: colors.panelDark,
+      borderWidth: 1,
+      borderColor: colors.panelDark,
+    },
+    venuesButtonText: { color: colors.textOnDark, fontWeight: '600', fontSize: 15 },
+    venuesButtonArrow: { fontSize: 20, color: colors.textOnDark },
+    sectionHeader: {
+      backgroundColor: colors.primaryTint,
+      paddingHorizontal: 16,
+      paddingVertical: 10,
+    },
+    sectionTitle: {
+      fontSize: 13,
+      fontWeight: '700',
+      color: colors.primary,
+      textTransform: 'uppercase',
+      letterSpacing: 0.6,
+    },
+  });
+}

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   Alert,
   KeyboardAvoidingView,
@@ -9,6 +9,8 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { supabase } from '../lib/supabase';
+import { useTheme } from '../context/ThemeContext';
+import { fonts, type ColorScheme } from '../theme';
 
 type Props = {
   email: string;
@@ -16,6 +18,8 @@ type Props = {
 };
 
 export function OtpVerifyScreen({ email, onBack }: Props) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => getStyles(colors), [colors]);
   const [code, setCode] = useState('');
   const [verifying, setVerifying] = useState(false);
 
@@ -44,7 +48,7 @@ export function OtpVerifyScreen({ email, onBack }: Props) {
       <TextInput
         style={styles.input}
         placeholder="123456"
-        placeholderTextColor="#999"
+        placeholderTextColor={colors.textFaint}
         keyboardType="number-pad"
         value={code}
         onChangeText={setCode}
@@ -65,23 +69,27 @@ export function OtpVerifyScreen({ email, onBack }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, justifyContent: 'center', padding: 24, backgroundColor: '#fff' },
-  title: { fontSize: 28, fontWeight: '700', textAlign: 'center', marginBottom: 8 },
-  subtitle: { fontSize: 15, color: '#555', textAlign: 'center', marginBottom: 28 },
-  input: {
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 10,
-    padding: 14,
-    fontSize: 22,
-    letterSpacing: 4,
-    textAlign: 'center',
-    marginBottom: 16,
-  },
-  button: { backgroundColor: '#2563eb', padding: 14, borderRadius: 10, alignItems: 'center' },
-  buttonDisabled: { opacity: 0.6 },
-  buttonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
-  linkButton: { marginTop: 16, alignItems: 'center' },
-  linkText: { color: '#2563eb', fontSize: 14 },
-});
+function getStyles(colors: ColorScheme) {
+  return StyleSheet.create({
+    container: { flex: 1, justifyContent: 'center', padding: 24, backgroundColor: colors.background },
+    title: { fontSize: 30, fontFamily: fonts.title, color: colors.text, textAlign: 'center', marginBottom: 8 },
+    subtitle: { fontSize: 15, color: colors.textMuted, textAlign: 'center', marginBottom: 28 },
+    input: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 10,
+      padding: 14,
+      fontSize: 22,
+      letterSpacing: 4,
+      textAlign: 'center',
+      marginBottom: 16,
+      color: colors.text,
+      backgroundColor: colors.surface,
+    },
+    button: { backgroundColor: colors.primary, padding: 14, borderRadius: 10, alignItems: 'center' },
+    buttonDisabled: { opacity: 0.6 },
+    buttonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+    linkButton: { marginTop: 16, alignItems: 'center' },
+    linkText: { color: colors.primary, fontSize: 14 },
+  });
+}

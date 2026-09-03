@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import {
   Alert,
@@ -12,6 +12,9 @@ import {
   View,
 } from 'react-native';
 import { supabase } from '../lib/supabase';
+import { useTheme } from '../context/ThemeContext';
+import { ScreenHeader } from '../components/ScreenHeader';
+import { type ColorScheme } from '../theme';
 
 type Venue = {
   location_name: string;
@@ -38,6 +41,8 @@ function openMaps(address: string) {
 }
 
 export function NavigateScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => getStyles(colors), [colors]);
   const [venues, setVenues] = useState<Venue[]>([]);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -62,6 +67,13 @@ export function NavigateScreen() {
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
   useEffect(() => {
+    // See HomeScreen.tsx's double-points-windows effect for why this guard
+    // exists — a fast unmount/remount can hand back an already-subscribed
+    // channel of the same topic, and calling .on() on it throws.
+    supabase
+      .getChannels()
+      .filter((c) => c.topic === 'realtime:navigate-events')
+      .forEach((c) => supabase.removeChannel(c));
     const channel = supabase
       .channel('navigate-events')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'events' }, load)
@@ -76,14 +88,15 @@ export function NavigateScreen() {
   }
 
   return (
-    <FlatList
-      style={styles.container}
-      contentContainerStyle={styles.content}
-      data={venues}
-      keyExtractor={(item) => item.location_name}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-      ListHeaderComponent={<Text style={styles.header}>Conference Venues</Text>}
-      ListEmptyComponent={<Text style={styles.empty}>No venues yet.</Text>}
+    <>
+      <ScreenHeader title="Venues" variant="banner" />
+      <FlatList
+        style={styles.container}
+        contentContainerStyle={styles.content}
+        data={venues}
+        keyExtractor={(item) => item.location_name}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        ListEmptyComponent={<Text style={styles.empty}>No venues yet.</Text>}
       renderItem={({ item }) => (
         <View style={styles.card}>
           <Text style={styles.venueName}>{item.location_name}</Text>
@@ -105,39 +118,46 @@ export function NavigateScreen() {
           </TouchableOpacity>
         </View>
       )}
-    />
+      />
+    </>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff' },
-  content: { padding: 16, paddingBottom: 40 },
-  header: { fontSize: 22, fontWeight: '700', color: '#1e293b', marginBottom: 16 },
-  empty: { textAlign: 'center', marginTop: 40, color: '#777' },
-  card: {
-    backgroundColor: '#f8faff',
-    borderRadius: 14,
-    padding: 16,
-    marginBottom: 14,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-  },
-  venueName: { fontSize: 16, fontWeight: '700', color: '#1e293b' },
-  address: { fontSize: 13, color: '#64748b', marginTop: 4 },
-  tags: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 10, gap: 6 },
-  tag: {
-    backgroundColor: '#dbeafe',
-    borderRadius: 20,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-  },
-  tagText: { fontSize: 12, color: '#2563eb', maxWidth: 180 },
-  mapsButton: {
-    marginTop: 14,
-    backgroundColor: '#2563eb',
-    borderRadius: 10,
-    paddingVertical: 11,
-    alignItems: 'center',
-  },
-  mapsButtonText: { color: '#fff', fontWeight: '600', fontSize: 14 },
-});
+function getStyles(colors: ColorScheme) {
+  return StyleSheet.create({
+    container: { flex: 1, backgroundColor: colors.background },
+    content: { padding: 16, paddingBottom: 40 },
+    empty: { textAlign: 'center', marginTop: 40, color: colors.textFaint },
+    card: {
+      backgroundColor: colors.surface,
+      borderRadius: 14,
+      padding: 16,
+      marginBottom: 14,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    // Plain bold sans, not fonts.title (PlayfairDisplay italic) — more
+    // readable for a venue list people are scanning for directions.
+    venueName: { fontSize: 18, fontWeight: '700', color: colors.text },
+    address: { fontSize: 13, color: colors.textMuted, marginTop: 4 },
+    tags: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 10, gap: 6 },
+    tag: {
+      backgroundColor: colors.borderLight,
+      borderRadius: 20,
+      paddingHorizontal: 10,
+      paddingVertical: 4,
+    },
+    tagText: { fontSize: 12, color: colors.textMuted, maxWidth: 180 },
+    mapsButton: {
+      marginTop: 14,
+      // panelDark, not colors.text — this button is deliberately black in
+      // both modes, not "page text color" that happens to be black in
+      // light mode.
+      backgroundColor: colors.panelDark,
+      borderRadius: 10,
+      paddingVertical: 11,
+      alignItems: 'center',
+    },
+    mapsButtonText: { color: colors.textOnDark, fontWeight: '600', fontSize: 14 },
+  });
+}

@@ -9,51 +9,37 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { supabase } from '../lib/supabase';
-import { HCaptchaModal, HCAPTCHA_ENABLED } from '../components/HCaptchaModal';
 import { useTheme } from '../context/ThemeContext';
 import { fonts, type ColorScheme } from '../theme';
 
 type Props = {
-  onCodeSent: (email: string) => void;
+  onVerified: (code: string) => void;
 };
 
-export function EmailEntryScreen({ onCodeSent }: Props) {
+export function RegistrationCodeScreen({ onVerified }: Props) {
   const { colors } = useTheme();
   const styles = useMemo(() => getStyles(colors), [colors]);
-  const [email, setEmail] = useState('');
-  const [sending, setSending] = useState(false);
-  const [showCaptcha, setShowCaptcha] = useState(false);
+  const [code, setCode] = useState('');
+  const [checking, setChecking] = useState(false);
 
-  async function sendCode(normalized: string, captchaToken?: string) {
-    setSending(true);
-    const { error } = await supabase.auth.signInWithOtp({
-      email: normalized,
-      options: captchaToken ? { captchaToken } : undefined,
-    });
-    setSending(false);
+  async function handleContinue() {
+    const trimmed = code.trim();
+    if (!trimmed) {
+      Alert.alert('Missing code', 'Enter the registration code from conference staff.');
+      return;
+    }
+    setChecking(true);
+    const { data, error } = await supabase.rpc('verify_event_access_code', { p_code: trimmed });
+    setChecking(false);
     if (error) {
-      Alert.alert('Could not send code', error.message);
+      Alert.alert('Could not verify code', error.message);
       return;
     }
-    onCodeSent(normalized);
-  }
-
-  async function handleSend() {
-    const normalized = email.trim().toLowerCase();
-    if (!normalized.includes('@')) {
-      Alert.alert('Invalid email', 'Enter a valid email address.');
+    if (!data) {
+      Alert.alert('Incorrect code', 'Check with conference staff and try again.');
       return;
     }
-    if (HCAPTCHA_ENABLED) {
-      setShowCaptcha(true);
-      return;
-    }
-    await sendCode(normalized);
-  }
-
-  function handleCaptchaToken(token: string) {
-    setShowCaptcha(false);
-    sendCode(email.trim().toLowerCase(), token);
+    onVerified(trimmed);
   }
 
   return (
@@ -62,30 +48,24 @@ export function EmailEntryScreen({ onCodeSent }: Props) {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <Text style={styles.title}>QR Meetup</Text>
-      <Text style={styles.subtitle}>Enter your email to get a code.</Text>
+      <Text style={styles.subtitle}>Enter the registration code from conference staff to get started.</Text>
       <TextInput
         style={styles.input}
-        placeholder="you@example.com"
+        value={code}
+        onChangeText={setCode}
+        placeholder="Registration code"
         placeholderTextColor={colors.textFaint}
-        keyboardType="email-address"
-        autoCapitalize="none"
-        autoComplete="email"
-        value={email}
-        onChangeText={setEmail}
-        editable={!sending}
+        autoCapitalize="characters"
+        autoCorrect={false}
+        editable={!checking}
       />
       <TouchableOpacity
-        style={[styles.button, sending && styles.buttonDisabled]}
-        onPress={handleSend}
-        disabled={sending}
+        style={[styles.button, checking && styles.buttonDisabled]}
+        onPress={handleContinue}
+        disabled={checking}
       >
-        <Text style={styles.buttonText}>{sending ? 'Sending...' : 'Send code'}</Text>
+        <Text style={styles.buttonText}>{checking ? 'Checking...' : 'Continue'}</Text>
       </TouchableOpacity>
-      <HCaptchaModal
-        visible={showCaptcha}
-        onToken={handleCaptchaToken}
-        onClose={() => setShowCaptcha(false)}
-      />
     </KeyboardAvoidingView>
   );
 }
