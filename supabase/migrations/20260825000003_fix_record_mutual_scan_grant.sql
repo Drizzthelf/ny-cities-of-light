@@ -1,0 +1,11 @@
+-- 20260825000002 replaced record_mutual_scan to add the double-points
+-- lookup, but copied its CREATE FUNCTION block from before the
+-- request/accept lockdown (20260823000000) — including a
+-- `grant execute ... to authenticated`, which silently re-opened the
+-- exact bypass that lockdown closed (a client could call
+-- record_mutual_scan directly again, skipping the request/accept flow
+-- entirely). Caught by the smoke test, not by inspection. Restore the
+-- revoke: record_mutual_scan must only be reachable from inside
+-- respond_to_connection_request (security definer), never called directly
+-- by a client.
+revoke execute on function public.record_mutual_scan(uuid) from authenticated;

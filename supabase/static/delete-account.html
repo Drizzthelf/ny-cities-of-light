@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Delete your QR Meetup account</title>
+<script src="https://js.hcaptcha.com/1/api.js" async defer></script>
+<style>
+  body { font-family: -apple-system, system-ui, sans-serif; max-width: 480px; margin: 40px auto; padding: 0 20px; color: #1e293b; }
+  h1 { font-size: 22px; }
+  p.sub { color: #64748b; font-size: 14px; line-height: 1.5; }
+  .step { display: none; }
+  .step.active { display: block; }
+  input { width: 100%; box-sizing: border-box; padding: 12px; font-size: 16px; border: 1px solid #ccc; border-radius: 8px; margin-top: 8px; }
+  button { width: 100%; padding: 13px; font-size: 15px; font-weight: 600; color: #fff; background: #2563eb; border: none; border-radius: 8px; margin-top: 14px; cursor: pointer; }
+  button.danger { background: #b91c1c; }
+  button:disabled { opacity: 0.5; cursor: default; }
+  .msg { margin-top: 12px; font-size: 14px; min-height: 18px; }
+  .msg.error { color: #b91c1c; }
+  .msg.success { color: #15803d; }
+  .warning { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; border-radius: 8px; padding: 12px; font-size: 13px; margin-top: 24px; }
+  .h-captcha { margin-top: 14px; }
+</style>
+</head>
+<body>
+  <h1>Delete your account</h1>
+  <p class="sub">This permanently removes your profile, contacts, event check-ins, and messages from QR Meetup. This cannot be undone.</p>
+
+  <div id="step-email" class="step active">
+    <input id="email" type="email" placeholder="you@example.com" autocomplete="email" />
+    <div class="h-captcha" data-sitekey="065e3092-2504-435a-be8a-ed20087c1cb0" data-callback="onCaptcha"></div>
+    <button id="send-btn" onclick="sendCode()">Send code</button>
+    <div id="email-msg" class="msg"></div>
+  </div>
+
+  <div id="step-code" class="step">
+    <p class="sub">Enter the code sent to <strong id="code-email"></strong>.</p>
+    <input id="code" type="text" inputmode="numeric" placeholder="123456" maxlength="8" />
+    <button id="verify-btn" onclick="verifyCode()">Verify</button>
+    <div id="code-msg" class="msg"></div>
+  </div>
+
+  <div id="step-confirm" class="step">
+    <p class="sub">You're verified. Deleting your account is permanent and cannot be undone.</p>
+    <button class="danger" id="delete-btn" onclick="deleteAccount()">Delete my account</button>
+    <div id="delete-msg" class="msg"></div>
+  </div>
+
+  <div id="step-done" class="step">
+    <p class="msg success">Your account and its data have been deleted.</p>
+  </div>
+
+  <div class="warning">If you didn't request this, ignore this page — nothing happens until you enter a code and confirm the deletion.</div>
+
+<script>
+  // Public project values only (same ones shipped in the mobile app bundle) —
+  // safe to embed directly in a static file. This page duplicates the app's
+  // email-OTP flow so it works even without the app installed, per Google
+  // Play's account-deletion requirement, then calls the same delete-account
+  // Edge Function the app uses.
+  var SUPABASE_URL = 'https://oggrlanwgmmdnvjltqel.supabase.co';
+  var ANON_KEY = 'sb_publishable_SOAXvlPvHzGOrTOj-JuZjA_WdPYsmuG';
+  var captchaToken = null;
+  var accessToken = null;
+  var email = '';
+
+  function onCaptcha(token) { captchaToken = token; }
+
+  function showStep(id) {
+    document.querySelectorAll('.step').forEach(function (el) { el.classList.remove('active'); });
+    document.getElementById(id).classList.add('active');
+  }
+
+  function setMsg(id, text, kind) {
+    var el = document.getElementById(id);
+    el.textContent = text;
+    el.className = 'msg' + (kind ? ' ' + kind : '');
+  }
+
+  async function sendCode() {
+    email = document.getElementById('email').value.trim().toLowerCase();
+    if (!email.includes('@')) { setMsg('email-msg', 'Enter a valid email address.', 'error'); return; }
+    var btn = document.getElementById('send-btn');
+    btn.disabled = true;
+    setMsg('email-msg', 'Sending...', '');
+    try {
+      var body = { email: email };
+      if (captchaToken) body.gotrue_meta_security = { captcha_token: captchaToken };
+      var res = await fetch(SUPABASE_URL + '/auth/v1/otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', apikey: ANON_KEY },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        var err = await res.json().catch(function () { return {}; });
+        throw new Error(err.error_description || err.msg || err.error || 'Could not send code.');
+      }
+      document.getElementById('code-email').textContent = email;
+      setMsg('email-msg', '', '');
+      showStep('step-code');
+    } catch (e) {
+      setMsg('email-msg', e.message, 'error');
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  async function verifyCode() {
+    var code = document.getElementById('code').value.trim();
+    if (code.length < 4) { setMsg('code-msg', 'Enter the code you received.', 'error'); return; }
+    var btn = document.getElementById('verify-btn');
+    btn.disabled = true;
+    setMsg('code-msg', 'Verifying...', '');
+    try {
+      var res = await fetch(SUPABASE_URL + '/auth/v1/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', apikey: ANON_KEY },
+        body: JSON.stringify({ email: email, token: code, type: 'email' }),
+      });
+      var data = await res.json().catch(function () { return {}; });
+      if (!res.ok || !data.access_token) {
+        throw new Error(data.error_description || data.msg || 'Verification failed.');
+      }
+      accessToken = data.access_token;
+      setMsg('code-msg', '', '');
+      showStep('step-confirm');
+    } catch (e) {
+      setMsg('code-msg', e.message, 'error');
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  async function deleteAccount() {
+    var btn = document.getElementById('delete-btn');
+    btn.disabled = true;
+    setMsg('delete-msg', 'Deleting...', '');
+    try {
+      var res = await fetch(SUPABASE_URL + '/functions/v1/delete-account', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + accessToken, apikey: ANON_KEY },
+      });
+      var data = await res.json().catch(function () { return {}; });
+      if (!res.ok || data.error) {
+        throw new Error(data.error || 'Could not delete account.');
+      }
+      showStep('step-done');
+    } catch (e) {
+      setMsg('delete-msg', e.message, 'error');
+      btn.disabled = false;
+    }
+  }
+</script>
+</body>
+</html>
