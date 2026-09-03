@@ -5,36 +5,64 @@ A React Native + Expo app for an event: each person gets a QR code; scanning som
 ## Stack
 - Expo (SDK 54) + React Native + TypeScript
 - Supabase (auth, Postgres, storage, realtime)
-- Phone OTP auth, persistent session
+- Email OTP auth, persistent session (migrated from phone OTP — old
+  `PhoneEntryScreen.tsx` is stale, see `docs/production-launch-plan.md`)
 - QR encodes the user's UUID only — latest profile is fetched on scan
+
+## Environments
+
+There are (or should be) three Supabase projects:
+
+| Environment | Purpose                                   | `.env` file          |
+|--------------|--------------------------------------------|----------------------|
+| local/dev    | your own sandbox, free tier is fine        | `.env`               |
+| staging      | pre-release testing, mirrors prod schema   | `.env.staging`        |
+| production   | real attendee data — Pro plan, Micro compute | `.env.production`   |
+
+Never point `.env.production` at anything but the real production project,
+and never run destructive testing (load tests, RLS attack tests, schema
+experiments) against it — use staging for that.
 
 ## Setup
 
-### 1. Supabase project
+### 1. Supabase project (schema is now CLI-managed)
 
-1. Go to https://supabase.com and create a new project (free tier is fine).
-2. Once created, open **SQL editor** and run the contents of `supabase/schema.sql`.
-3. Open **Authentication → Providers → Phone** and enable it. You'll need an SMS provider:
-   - **Twilio** (easiest): sign up at twilio.com, get an Account SID + Auth Token + Messaging Service SID, paste into Supabase.
-   - **MessageBird / Vonage / Textlocal** also supported.
-   - For dev-only testing, Supabase lets you configure a static OTP (set in **Authentication → Providers → Phone → Test OTP**) so you don't need to wire up SMS.
-4. Open **Project Settings → API** and copy:
+Schema changes are managed with the Supabase CLI under `supabase/migrations/`
+— `supabase/schema.sql` is now a historical snapshot only, not something to
+hand-paste into the SQL editor. To stand up a new project (staging or
+production):
+
+1. Go to https://supabase.com and create the project.
+2. Authenticate the CLI once: `npx supabase login` (opens a browser).
+3. Link this repo to that project: `npx supabase link --project-ref <ref>`
+   (the ref is in the project's dashboard URL / Project Settings → General).
+4. Apply all migrations: `npx supabase db push`.
+5. Open **Authentication → Providers → Email** and confirm it's enabled
+   (this is the current auth method — not Phone/SMS).
+6. Open **Project Settings → API** and copy:
    - `Project URL`
    - `anon public` key
 
+To pull down whatever's *already* live in a project (e.g. to check an
+existing project for drift from the migrations folder), use
+`npx supabase db pull` instead of step 4 — it generates a new migration file
+capturing anything not yet represented locally.
+
 ### 2. Make yourself an admin
 
-After you sign up once through the app, run this in the Supabase SQL editor (replace the phone number):
+After you sign up once through the app, run this in the Supabase SQL editor (replace the email):
 
 ```sql
 update public.profiles
 set is_admin = true
-where phone = '+15551234567';
+where id = (select id from auth.users where email = 'you@example.com');
 ```
 
 ### 3. Configure the app
 
-Create a `.env` file in the project root (see `.env.example`):
+Create a `.env` file in the project root for local dev (see `.env.example`),
+or `.env.staging` / `.env.production` for those environments (see
+`.env.staging.example` / `.env.production.example`):
 
 ```
 EXPO_PUBLIC_SUPABASE_URL=https://your-project.supabase.co

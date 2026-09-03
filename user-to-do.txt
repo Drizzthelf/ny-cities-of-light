@@ -1,0 +1,171 @@
+QR MEETUP — YOUR TO-DO LIST
+Generated 2026-08-17. Full context/rationale for every item below lives in
+docs/production-launch-plan.md — this file is just the checklist of things
+that specifically need YOU (an account only you can create, a decision only
+you/the client can make, or real-world testing I can't do from here).
+
+====================================================================
+BLOCKING — needed before store submission
+====================================================================
+
+[ ] Enable GitHub Pages: repo Settings -> Pages -> Source -> "gh-pages"
+    branch, root folder ("/"). Then add this URL to Play Console's Data
+    Safety form as the web-accessible account-deletion URL:
+
+      https://drizzthelf.github.io/ny-cities-of-light/
+
+    (Note: the repo was renamed from qr-meetup to ny-cities-of-light at
+    some point -- the old remote URL still redirects fine for git, but the
+    Pages URL above uses the current name.)
+
+[ ] Test account deletion for real, end to end, on a throwaway account:
+      - In-app: Profile tab -> "Delete account"
+      - Web: the GitHub Pages URL above
+    Neither path has been tested with a real email/OTP yet -- only the
+    security boundary (rejecting missing/bad auth) has been verified.
+
+[ ] Flip hCaptcha on: Supabase Dashboard -> Authentication -> Attack
+    Protection -> toggle "Enable CAPTCHA protection" ON.
+    Do this ONLY after an app build containing the hCaptcha widget has
+    actually reached real devices. Flipping it before that locks out every
+    user immediately, including you. (Site key is already live in the .env
+    files; the app-side widget is already built and wired in.)
+
+[ ] Enroll in the Apple Developer Program ($99/yr) under the conference/org
+    account, not a personal one.
+
+[ ] Register a Google Play Developer account ($25 one-time) under the
+    conference/org account, not a personal one.
+
+====================================================================
+NEEDS A DECISION FROM YOU (OR THE CLIENT)
+====================================================================
+
+[ ] Get the client's actual draft Privacy Policy and Code of Conduct /
+    Acceptable Use Policy documents (referenced in their review email but
+    never actually attached to it). Once you have them, hand them over --
+    they go in docs/privacy-policy.md and docs/code-of-conduct.md, and the
+    code-of-conduct acknowledgment screen is blocked on this too.
+
+[x] Decide the data retention policy -- DONE. Data is wiped no later than
+    30 days after the conference concludes (this is what's actually written
+    into the live privacy-policy.txt / in-app Privacy Policy screen, which
+    supersedes an earlier "one week" note here — 30 days is the correct,
+    current number). The wipe itself is still manual, not automated —
+    nothing in supabase/migrations performs it. Whoever owns this needs an
+    actual calendar reminder for ~30 days post-conference to do it by hand.
+
+[ ] Confirm no under-13 attendees are expected (COPPA). If minors could be
+    present, this needs explicit handling.
+    - No Minors are invited to attend.
+
+[ ] If attendees may be outside the US, decide whether a GDPR/CCPA pass is
+    warranted (account deletion likely already covers "right to erase").
+    - No attendees are expected to be from outside the US but let's do a pass through the GDPR/CCPA anyway.
+
+[x] Decide whether to build an attendee access-code flow -- DONE (2026-08-18).
+    One shared code, NYCYSACONF, required to create a profile. Built,
+    verified, and live on production (see docs/production-launch-plan.md
+    §3.6). Nothing left to do here except tell attendees the code.
+
+[ ] Decide whether an Eventbrite registrant allow-list ships at all, and if
+    so when -- needed before the salted-hash sync design can start.
+    - Shelf this for now and go with the one time code approach.
+
+[x] MOOT (2026-09-03) -- "Ask the organizers" (service_requests / Admin tab
+    -> Msgs) was removed from the app entirely at some point; there's no
+    ServiceScreen and no Admin "Msgs" tab anymore. Your answers below were
+    for a feature that no longer has any UI, so there's nothing to monitor
+    or escalate through it. (The organizers-are-admins /
+    escalate-outside-the-app decisions still apply to the Reports feature,
+    which is the thing that actually shipped.)
+    - We will have conference organizers be admins. They will be manually added in Supabase.
+    - Contact with "real" leaders for issues that need to be escalated will be done outside the app.
+
+[ ] Give a real expected attendance number. Several things are currently
+    built with a placeholder/parameterized number and need a real figure to
+    finalize:
+      - Peak-concurrency model in the plan doc's Section 4 -- also
+        determines whether you need to ask Supabase support to raise the
+        Realtime 500-concurrent-connection limit (Pro plan default) before
+        the event.
+        - Uncapped the spending cap so can handle 2000 concurrent users. Double check to make sure nothing will go wrong there.
+        - STILL OPEN (2026-09-03): the *spending* cap and the Realtime
+          *connection* cap are two separate things. Uncapping spend does not
+          raise the 500-concurrent-connection Realtime limit -- that still
+          requires an actual conversation with Supabase support. At 2000
+          expected concurrent attendees against a 500-connection default,
+          this is the single biggest unverified technical risk for launch.
+          Reach out to Supabase support about this before the event, not
+          after.
+      - supabase/tests/leaderboard-scale-check.sql -- re-run with the real
+        number to confirm performance still holds.
+      - Auth rate limit ("emails per hour") sizing, below.
+
+====================================================================
+NEEDS AN EXTERNAL ACCOUNT OR ACTION ONLY YOU CAN DO
+====================================================================
+
+[ ] Raise the auth "emails per hour" rate limit: Supabase Dashboard ->
+    Authentication -> Rate Limits. It's still on the tiny testing default
+    even though Resend/custom SMTP is live.
+    -- The rate limit for sending email is 1999 email/h. 
+
+[ ] Confirm the second admin's Supabase access actually works end-to-end
+    (can log in, can see the project) -- verify now, not during an
+    incident.
+    - Pending
+
+[x] Monitoring -- DONE (2026-08-20). One free UptimeRobot monitor on
+    https://oggrlanwgmmdnvjltqel.supabase.co/auth/v1/health?apikey=...
+    watching the Auth service (GoTrue) specifically -- catches the
+    "I'm logged in fine but the auth rate limit or Realtime cap is quietly
+    locking other attendees out" blind spot. Confirmed the healthy response
+    is a plain HTTP 200 with a GoTrue version JSON body -- no keyword/status
+    override needed on the free plan. Note: this checks Auth only, not the
+    database directly -- a DB-only outage with Auth still up wouldn't be
+    caught by this one monitor, but Project -> Reports in the Supabase
+    dashboard covers DB health with no setup.
+    Recommended: trigger a test alert (pause/unpause the monitor, or use
+    its "test notification" option) once, to confirm the actual
+    email/SMS alert fires, not just the check itself.
+
+[ ] If you want a genuine load test (simulated concurrent users hitting the
+    real API, not just the SQL-level check already done): needs either a
+    short local script using the service_role key (never commit it) or
+    enough real OTP-verified test accounts. Neither is available in this
+    environment.
+    - Need a walkthrough to help set up this test as well. We need to test for 2000 concurrent users.
+
+====================================================================
+STORE SUBMISSION PREP (once the accounts above exist)
+====================================================================
+
+[ ] App Store Connect: App Privacy nutrition label, age rating, screenshots
+    per device size, TestFlight internal + external beta round.
+
+[ ] Play Console: Data Safety section, target API level check,
+    closed/internal testing track.
+
+[ ] Build via EAS Build for both platforms (Expo Go can't be submitted).
+
+[ ] Budget review time -- camera + account-deletion flows can trigger
+    manual App Store review; don't submit at the deadline.
+
+[ ] Staff the moderation queue for actual event hours, including Friday
+    night/Saturday specifically -- name who's on call and what "action
+    within N minutes" means.
+
+[ ] Try the admin moderation flow live on a phone (Admin tab -> Reports):
+    confirm reviewing a report and using its "Delete user" shortcut is
+    actually fast enough to use during a live event, and that whoever's on
+    moderation duty has admin access and knows this tab exists.
+
+====================================================================
+FYI / NOT URGENT
+====================================================================
+
+- .env.remote.backup points at a different Supabase project ref
+  (cucfdatbsbnapaelfmel) than the one actually in use
+  (oggrlanwgmmdnvjltqel). You said to ignore this -- noted here only in
+  case it matters later.
