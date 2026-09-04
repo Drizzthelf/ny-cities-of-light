@@ -13,7 +13,7 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true,
+      "supportsTablet": false,
       "infoPlist": {
         "NSCameraUsageDescription": "NY Cities of Light uses the camera to scan QR codes.",
         "NSPhotoLibraryUsageDescription": "NY Cities of Light needs photo library access so you can pick a profile photo.",
@@ -29,7 +29,8 @@
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "permissions": [
-        "android.permission.CAMERA"
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
       ],
       "package": "com.ja123yu.nycitiesoflight"
     },
@@ -59,6 +60,12 @@
         "projectId": "1ff5fb9d-6c5a-4005-b237-d0c610359312"
       }
     },
-    "owner": "ja123yu"
+    "owner": "ja123yu",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/1ff5fb9d-6c5a-4005-b237-d0c610359312"
+    }
   }
 }
