@@ -4,7 +4,9 @@ import {
   Alert,
   FlatList,
   Image,
+  Modal,
   RefreshControl,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -16,7 +18,7 @@ import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { ScreenHeader } from '../components/ScreenHeader';
 import type { RaffleEntry, RafflePrize, RafflePrizeStats } from '../types/database';
-import { type ColorScheme } from '../theme';
+import { fonts, type ColorScheme } from '../theme';
 
 export function RaffleScreen() {
   const { profile } = useAuth();
@@ -33,6 +35,7 @@ export function RaffleScreen() {
   const [saving, setSaving] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [rulesVisible, setRulesVisible] = useState(false);
 
   const load = useCallback(async () => {
     if (!profile) return;
@@ -143,7 +146,47 @@ export function RaffleScreen() {
 
   return (
     <>
-      <ScreenHeader title="Raffle" backLabel="QR Meetup" variant="banner" />
+      <ScreenHeader
+        title="Raffle"
+        backLabel="QR Meetup"
+        variant="banner"
+        right={
+          <TouchableOpacity style={styles.infoButton} onPress={() => setRulesVisible(true)}>
+            <Text style={styles.infoButtonText}>ⓘ</Text>
+          </TouchableOpacity>
+        }
+      />
+      <Modal visible={rulesVisible} transparent animationType="fade" onRequestClose={() => setRulesVisible(false)}>
+        <TouchableOpacity style={styles.rulesBackdrop} activeOpacity={1} onPress={() => setRulesVisible(false)}>
+          <TouchableOpacity style={styles.rulesCard} activeOpacity={1} onPress={() => {}}>
+            <Text style={styles.rulesTitle}>How the raffle works</Text>
+            <ScrollView style={styles.rulesScroll}>
+              <Text style={styles.rulesSectionHeading}>Earning points</Text>
+              <Text style={styles.rulesText}>
+                • Scanning someone new is worth 10 points (20 during a 2x points window).{'\n'}
+                • You can scan the same person again on a later day for a bonus: the 2nd day is a flat 15 points, and the 3rd (final) day is a flat 20 points — after that you've maxed out that pair.{'\n'}
+                • Only one scan per person per day, resetting at midnight — you can't scan the same person twice in one day for extra points.{'\n'}
+                • Checking into a conference event is worth 50 points.
+              </Text>
+              <Text style={styles.rulesSectionHeading}>Points → raffle tickets</Text>
+              <Text style={styles.rulesText}>
+                Your total points convert to tickets on a curve: your first 5 tickets cost 28 points each, the next 5 cost 35 points each, the next 5 cost 42 points each, and so on — each block of 5 tickets costs 7 more points per ticket than the block before it.
+              </Text>
+              <Text style={styles.rulesSectionHeading}>Assigning tickets</Text>
+              <Text style={styles.rulesText}>
+                You can assign and reassign your earned tickets across prizes right here on the Raffle page, as many times as you like, for as long as a prize's entries stay open. Once a prize's entry window closes (or its winner is drawn), any tickets you've committed to it are locked in — they can't be changed, refunded, or moved to a different prize.
+              </Text>
+              <Text style={styles.rulesSectionHeading}>Winners</Text>
+              <Text style={styles.rulesText}>
+                Winners are chosen at random, weighted by tickets — more tickets in a prize means better odds, but never a guarantee.
+              </Text>
+            </ScrollView>
+            <TouchableOpacity style={styles.rulesCloseBtn} onPress={() => setRulesVisible(false)}>
+              <Text style={styles.rulesCloseBtnText}>Got it</Text>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
       <FlatList
         style={styles.container}
         contentContainerStyle={styles.list}
@@ -320,5 +363,15 @@ function getStyles(colors: ColorScheme) {
     drawnBoxWon: { backgroundColor: colors.highlightTint },
     drawnText: { color: colors.textMuted, fontSize: 13, fontWeight: '600', textAlign: 'center' },
     drawnTextWon: { color: colors.highlightText },
+    infoButton: { paddingVertical: 12, paddingHorizontal: 12, alignItems: 'flex-end' },
+    infoButtonText: { color: colors.textOnDark, fontSize: 20, fontWeight: '700' },
+    rulesBackdrop: { flex: 1, backgroundColor: colors.overlay, justifyContent: 'center', padding: 24 },
+    rulesCard: { backgroundColor: colors.surface, borderRadius: 16, padding: 20, maxHeight: '80%' },
+    rulesTitle: { fontSize: 19, fontFamily: fonts.title, color: colors.text, marginBottom: 12 },
+    rulesScroll: { flexGrow: 0 },
+    rulesSectionHeading: { fontSize: 13, fontWeight: '700', color: colors.primary, marginTop: 14 },
+    rulesText: { fontSize: 13, color: colors.textSecondary, marginTop: 6, lineHeight: 19 },
+    rulesCloseBtn: { marginTop: 16, backgroundColor: colors.primary, borderRadius: 10, paddingVertical: 12, alignItems: 'center' },
+    rulesCloseBtnText: { color: '#fff', fontWeight: '600', fontSize: 15 },
   });
 }

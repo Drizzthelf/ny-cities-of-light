@@ -31,6 +31,11 @@ const lightColors = {
   primaryTint: '#e3f3fa',
   primaryTintBorder: '#bfe3f2',
   primaryDark: '#0b6d92',
+  // Same role as primaryTint/primaryTintBorder, but reserved for the native
+  // DateTimePicker spinner's wrapper — identical to primaryTint in light
+  // mode, but see darkColors below for why it needs its own dark value.
+  pickerTint: '#e3f3fa',
+  pickerTintBorder: '#bfe3f2',
 
   text: brand.black,
   textSecondary: '#3a3a38',
@@ -88,6 +93,12 @@ const darkColors: { [K in keyof typeof lightColors]: string } = {
   primaryTint: '#132633',
   primaryTintBorder: '#1f3d4f',
   primaryDark: '#8fd3f2',
+  // Brighter than primaryTint/primaryTintBorder on purpose — the native
+  // spinner's own dark-mode text/highlight rendering needs a lighter panel
+  // behind it than the badge/button tint does, or the whole dial reads as
+  // too dark to use.
+  pickerTint: '#1c3a4d',
+  pickerTintBorder: '#2f5872',
 
   text: '#f4f1ea',
   textSecondary: '#d6d2c8',

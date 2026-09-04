@@ -13,6 +13,10 @@ type Props = {
   // opt-in per screen rather than a blanket change to every ScreenHeader
   // consumer (e.g. the edit-profile form keeps 'plain').
   variant?: 'plain' | 'banner';
+  // Replaces the empty centering spacer on the right with a screen-specific
+  // action (e.g. Raffle's rules info button). Kept the same minWidth as the
+  // back button so the title stays centered either way.
+  right?: React.ReactNode;
 };
 
 // Renders its own back button instead of relying on native-stack's built-in
@@ -22,7 +26,7 @@ type Props = {
 // this project's app.json) where the native header's back button silently
 // stops responding (react-native-screens#1460, expo/expo#30141). This
 // sidesteps the whole bug class rather than chasing it per-screen.
-export function ScreenHeader({ title, backLabel = 'Back', variant = 'plain' }: Props) {
+export function ScreenHeader({ title, backLabel = 'Back', variant = 'plain', right }: Props) {
   const navigation = useNavigation();
   const { colors } = useTheme();
   const styles = useMemo(() => getStyles(colors), [colors]);
@@ -38,7 +42,7 @@ export function ScreenHeader({ title, backLabel = 'Back', variant = 'plain' }: P
         <Text style={[styles.title, banner && styles.titleBanner]} numberOfLines={1}>
           {title}
         </Text>
-        <View style={styles.backButton} />
+        <View style={styles.backButton}>{right}</View>
       </View>
     </SafeAreaView>
   );

@@ -25,7 +25,7 @@ export function LeaderboardScreen() {
   const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
-    const { data } = await supabase.from('leaderboard').select('*').limit(100);
+    const { data } = await supabase.from('leaderboard').select('*').limit(10);
     setRows((data ?? []) as LeaderboardRow[]);
   }, []);
 
@@ -66,7 +66,7 @@ export function LeaderboardScreen() {
           return (
             <View style={[styles.row, isMe && styles.rowMe]}>
               <Text style={styles.rank}>
-                {index < 3 ? MEDALS[index] : `${index + 1}`}
+                {index < 3 ? MEDALS[index] : ''}
               </Text>
               <Avatar photoUrl={item.photo_url} name={item.first_name} size={40} style={styles.avatar} />
               <View style={styles.nameBlock}>

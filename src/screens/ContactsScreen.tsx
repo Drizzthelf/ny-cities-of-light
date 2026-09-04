@@ -20,8 +20,17 @@ import { ScreenHeader } from '../components/ScreenHeader';
 import type { Profile, SocialPlatform } from '../types/database';
 import { type ColorScheme } from '../theme';
 
-type Row = Profile & { scanned_at: string; scan_count: number };
+type Row = Profile & { scanned_at: string; scan_count: number; last_scan_date: string };
 type ViewMode = 'all' | 'favorites';
+
+// "Today" per the conference's own clock (America/New_York), matching
+// scans.scan_date's day boundary — see
+// supabase/migrations/20260903000100_repeat_scans.sql. en-CA formats as
+// YYYY-MM-DD, the same shape Postgres returns for a `date` column, so the
+// two compare directly as strings.
+function todayEasternDate(): string {
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+}
 
 const SOCIAL_ICONS: Record<SocialPlatform, keyof typeof Ionicons.glyphMap> = {
   instagram: 'logo-instagram',
@@ -29,10 +38,6 @@ const SOCIAL_ICONS: Record<SocialPlatform, keyof typeof Ionicons.glyphMap> = {
   twitter: 'logo-twitter',
   tiktok: 'logo-tiktok',
 };
-
-// Bronze/silver/gold for the 1st/2nd/3rd time you've scanned this person —
-// up to 3 scans per pair now that a re-scan on a later day is allowed.
-const SCAN_MEDALS = ['🥉', '🥈', '🥇'];
 
 export function ContactsScreen() {
   const { session } = useAuth();
@@ -51,14 +56,14 @@ export function ContactsScreen() {
     const [{ data: scanData }, { data: favData }] = await Promise.all([
       supabase
         .from('scans')
-        .select('created_at, scanned:profiles!scans_scanned_id_fkey(*, profile_socials(*))')
+        .select('created_at, scan_date, scanned:profiles!scans_scanned_id_fkey(*, profile_socials(*))')
         .eq('scanner_id', session.user.id)
         .order('created_at', { ascending: false }),
       supabase.from('favorites').select('contact_id').eq('user_id', session.user.id),
     ]);
     // One scans row per scan event now (up to 3 per contact, one per day
     // scanned), not one per contact — collapse to one Row per contact,
-    // counting events and keeping the most recent scanned_at.
+    // counting events and keeping the most recent scanned_at/scan_date.
     const byContact = new Map<string, Row>();
     for (const r of (scanData ?? []) as any[]) {
       const scanned = r.scanned as Profile;
@@ -66,8 +71,14 @@ export function ContactsScreen() {
       if (existing) {
         existing.scan_count += 1;
         if (r.created_at > existing.scanned_at) existing.scanned_at = r.created_at;
+        if (r.scan_date > existing.last_scan_date) existing.last_scan_date = r.scan_date;
       } else {
-        byContact.set(scanned.id, { ...scanned, scanned_at: r.created_at, scan_count: 1 });
+        byContact.set(scanned.id, {
+          ...scanned,
+          scanned_at: r.created_at,
+          scan_count: 1,
+          last_scan_date: r.scan_date,
+        });
       }
     }
     const mapped = [...byContact.values()].sort((a, b) => b.scanned_at.localeCompare(a.scanned_at));
@@ -112,6 +123,19 @@ export function ContactsScreen() {
     }
   }
 
+  function showScanInfo(item: Row) {
+    const scannedToday = item.last_scan_date === todayEasternDate();
+    Alert.alert(
+      item.first_name,
+      `You've scanned ${item.first_name} ${item.scan_count} time${item.scan_count === 1 ? '' : 's'}.\n` +
+        (scannedToday
+          ? `You have scanned ${item.first_name} today.`
+          : `You have not scanned ${item.first_name} today.`)
+    );
+  }
+
+  const favoritesCount = rows.filter((r) => favoriteIds.has(r.id)).length;
+
   const modeRows = viewMode === 'favorites' ? rows.filter((r) => favoriteIds.has(r.id)) : rows;
   const query = search.trim().toLowerCase();
   const visibleRows = query
@@ -131,13 +155,13 @@ export function ContactsScreen() {
           style={[styles.tab, viewMode === 'all' && styles.tabActive]}
           onPress={() => setViewMode('all')}
         >
-          <Text style={[styles.tabText, viewMode === 'all' && styles.tabTextActive]}>All</Text>
+          <Text style={[styles.tabText, viewMode === 'all' && styles.tabTextActive]}>All ({rows.length})</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.tab, viewMode === 'favorites' && styles.tabActive]}
           onPress={() => setViewMode('favorites')}
         >
-          <Text style={[styles.tabText, viewMode === 'favorites' && styles.tabTextActive]}>★ Favorites</Text>
+          <Text style={[styles.tabText, viewMode === 'favorites' && styles.tabTextActive]}>★ Favorites ({favoritesCount})</Text>
         </TouchableOpacity>
       </View>
 
@@ -170,13 +194,21 @@ export function ContactsScreen() {
           <TouchableOpacity style={styles.row} onPress={() => setSelected(item)} activeOpacity={0.7}>
             <Avatar photoUrl={item.photo_url} name={item.first_name} size={56} />
             <View style={styles.rowText}>
-              <Text style={styles.name}>
-                {SCAN_MEDALS[Math.min(item.scan_count, 3) - 1]} {item.first_name}
-              </Text>
+              <Text style={styles.name}>{item.first_name}</Text>
               {item.profile_socials.length > 0 ? (
-                <Text style={styles.meta}>{item.profile_socials.map((s) => s.handle).join(' · ')}</Text>
+                <Text style={styles.meta} numberOfLines={1} ellipsizeMode="tail">
+                  {item.profile_socials.map((s) => s.handle).join(' · ')}
+                </Text>
               ) : null}
             </View>
+            <TouchableOpacity style={styles.scanCheckButton} onPress={() => showScanInfo(item)}>
+              <Text style={styles.scanCountText}>{item.scan_count}</Text>
+              <Ionicons
+                name="checkmark-circle"
+                size={22}
+                color={item.last_scan_date === todayEasternDate() ? colors.success : colors.textFaint}
+              />
+            </TouchableOpacity>
             <TouchableOpacity style={styles.starButton} onPress={() => toggleFavorite(item.id)}>
               <Text style={styles.starButtonText}>{favoriteIds.has(item.id) ? '★' : '☆'}</Text>
             </TouchableOpacity>
@@ -280,8 +312,10 @@ function getStyles(colors: ColorScheme) {
     rowText: { flex: 1, marginLeft: 12 },
     name: { fontSize: 16, fontWeight: '600', color: colors.text },
     meta: { color: colors.textMuted, fontSize: 13, marginTop: 2 },
+    scanCheckButton: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 4, paddingVertical: 4 },
+    scanCountText: { fontSize: 13, fontWeight: '600', color: colors.textMuted },
     starButton: { paddingHorizontal: 8, paddingVertical: 4 },
-    starButtonText: { fontSize: 22, color: colors.highlightText },
+    starButtonText: { fontSize: 22, color: colors.highlight },
     detailBackdrop: {
       flex: 1,
       backgroundColor: colors.overlay,
@@ -301,7 +335,7 @@ function getStyles(colors: ColorScheme) {
     // the italic serif for readability.
     detailName: { fontSize: 24, fontWeight: '700', color: colors.text, marginTop: 16 },
     detailFavoriteButton: { marginTop: 10, paddingVertical: 6, paddingHorizontal: 14 },
-    detailFavoriteText: { color: colors.highlightText, fontSize: 14, fontWeight: '600' },
+    detailFavoriteText: { color: colors.highlight, fontSize: 14, fontWeight: '600' },
     detailHint: { color: colors.textFaint, marginTop: 14, fontSize: 13 },
     socialsBox: {
       marginTop: 16,

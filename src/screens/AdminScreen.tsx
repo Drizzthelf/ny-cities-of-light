@@ -191,7 +191,7 @@ function EventFormModal({
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const { colors } = useTheme();
+  const { colors, mode } = useTheme();
   const styles = useMemo(() => getStyles(colors), [colors]);
   const isNew = event === 'new';
   const existing = isNew ? null : (event as Event | null);
@@ -363,6 +363,7 @@ function EventFormModal({
                 value={pickerValue}
                 mode={picker.mode}
                 display="spinner"
+                themeVariant={mode === 'dark' ? 'dark' : 'light'}
                 onChange={onPickerChange}
               />
             </View>
@@ -545,7 +546,7 @@ function DoublePointsFormModal({
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const { colors } = useTheme();
+  const { colors, mode } = useTheme();
   const styles = useMemo(() => getStyles(colors), [colors]);
   const [startDate, setStartDate] = useState(new Date());
   const [endDate, setEndDate] = useState(new Date(Date.now() + 60 * 60 * 1000));
@@ -664,6 +665,7 @@ function DoublePointsFormModal({
                 value={pickerValue}
                 mode={picker.mode}
                 display="spinner"
+                themeVariant={mode === 'dark' ? 'dark' : 'light'}
                 onChange={onPickerChange}
               />
             </View>
@@ -846,7 +848,7 @@ function PrizeFormModal({
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const { colors } = useTheme();
+  const { colors, mode } = useTheme();
   const styles = useMemo(() => getStyles(colors), [colors]);
   const isNew = prize === 'new';
   const existing = isNew ? null : (prize as RafflePrize | null);
@@ -998,7 +1000,7 @@ function PrizeFormModal({
               <TouchableOpacity style={styles.pickerDoneBtn} onPress={() => setPicker((p) => ({ ...p, show: false }))}>
                 <Text style={styles.pickerDoneText}>Done</Text>
               </TouchableOpacity>
-              <DateTimePicker value={closesAt} mode={picker.mode} display="spinner" onChange={onClosesAtPickerChange} />
+              <DateTimePicker value={closesAt} mode={picker.mode} display="spinner" themeVariant={mode === 'dark' ? 'dark' : 'light'} onChange={onClosesAtPickerChange} />
             </View>
           )}
           {picker.show && closesAt && Platform.OS === 'android' && (
@@ -1459,7 +1461,7 @@ function getStyles(colors: ColorScheme) {
   dtBtn: { flex: 1, padding: 10, borderRadius: 8, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.primaryTint, alignItems: 'center' },
   dtBtnActive: { borderColor: colors.primary, backgroundColor: colors.primaryTintBorder },
   dtBtnText: { fontSize: 13, color: colors.text, fontWeight: '500' },
-  pickerContainer: { marginTop: 8, borderRadius: 12, overflow: 'hidden', backgroundColor: colors.primaryTint, borderWidth: 1, borderColor: colors.primaryTintBorder },
+  pickerContainer: { marginTop: 8, borderRadius: 12, overflow: 'hidden', backgroundColor: colors.pickerTint, borderWidth: 1, borderColor: colors.pickerTintBorder },
   pickerDoneBtn: { alignItems: 'flex-end', paddingHorizontal: 16, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: colors.border },
   pickerDoneText: { color: colors.primary, fontWeight: '700', fontSize: 15 },
   msgHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
