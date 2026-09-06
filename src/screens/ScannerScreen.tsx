@@ -48,9 +48,18 @@ function easternDateString(d: Date = new Date()): string {
   return `${get('year')}-${get('month')}-${get('day')}`;
 }
 
+// Matches the server-side gate in
+// supabase/migrations/20260905000000_pre_conference_scan_lockout.sql — the
+// conference starts Sept 18, and until then every scan is a flat 10 points
+// with no repeats allowed, regardless of what scan number it'd otherwise be.
+const PRE_CONFERENCE_CUTOFF = '2026-09-18';
+
 // Points for the Nth scan of the same person: 1st is 10 (20 during a
-// double-points window), 2nd and 3rd are flat regardless of double points.
-function pointsForScanNumber(n: number, doublePointsActive: boolean): number {
+// double-points window), 2nd and 3rd are flat regardless of double points —
+// except before the conference starts, where every scan is flat 10 (see
+// PRE_CONFERENCE_CUTOFF above).
+function pointsForScanNumber(n: number, doublePointsActive: boolean, todayEt: string): number {
+  if (todayEt <= PRE_CONFERENCE_CUTOFF) return 10;
   if (n === 1) return doublePointsActive ? 20 : 10;
   if (n === 2) return 15;
   return 20;
@@ -259,9 +268,11 @@ export function ScannerScreen() {
     setTimeout(() => { lockRef.current = false; }, 1500);
   }
 
+  const todayEt = easternDateString();
   const maxedOut = priorScanCount >= 3;
-  const scanBlocked = maxedOut || scannedTodayAlready;
-  const nextScanPoints = pointsForScanNumber(priorScanCount + 1, doublePointsActive);
+  const tooEarlyForRepeat = priorScanCount >= 1 && todayEt <= PRE_CONFERENCE_CUTOFF;
+  const scanBlocked = maxedOut || scannedTodayAlready || tooEarlyForRepeat;
+  const nextScanPoints = pointsForScanNumber(priorScanCount + 1, doublePointsActive, todayEt);
 
   if (!permission) return <ActivityIndicator style={{ flex: 1 }} />;
   if (!permission.granted) {
@@ -333,7 +344,7 @@ export function ScannerScreen() {
                 ) : null}
                 {!scanBlocked && (
                   <Text style={styles.pointsHint}>
-                    {priorScanCount === 0 && doublePointsActive
+                    {priorScanCount === 0 && doublePointsActive && todayEt > PRE_CONFERENCE_CUTOFF
                       ? '🔥 +20 pts for both of you (2x active!)'
                       : `+${nextScanPoints} pts for both of you`}
                   </Text>
@@ -341,6 +352,8 @@ export function ScannerScreen() {
 
                 {maxedOut ? (
                   <Text style={styles.alreadyText}>You've scanned each other the max 3 times 🎉</Text>
+                ) : tooEarlyForRepeat ? (
+                  <Text style={styles.alreadyText}>You can scan them again starting September 19</Text>
                 ) : (
                   scannedTodayAlready && (
                     <Text style={styles.alreadyText}>Already scanned today — try again tomorrow</Text>
@@ -378,7 +391,9 @@ export function ScannerScreen() {
                 )}
                 {scanBlocked && (
                   <TouchableOpacity style={[styles.button, styles.buttonDisabled]} disabled>
-                    <Text style={styles.buttonText}>{maxedOut ? 'Max scans reached' : 'Come back tomorrow'}</Text>
+                    <Text style={styles.buttonText}>
+                      {maxedOut ? 'Max scans reached' : tooEarlyForRepeat ? 'Not yet' : 'Come back tomorrow'}
+                    </Text>
                   </TouchableOpacity>
                 )}
 

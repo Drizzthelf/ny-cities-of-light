@@ -164,13 +164,13 @@ export function RaffleScreen() {
               <Text style={styles.rulesSectionHeading}>Earning points</Text>
               <Text style={styles.rulesText}>
                 • Scanning someone new is worth 10 points (20 during a 2x points window).{'\n'}
-                • You can scan the same person again on a later day for a bonus: the 2nd day is a flat 15 points, and the 3rd (final) day is a flat 20 points — after that you've maxed out that pair.{'\n'}
+                • Starting September 19, you can scan the same person again on a later day for a bonus: the 2nd day is a flat 15 points, and the 3rd (final) day is a flat 20 points — after that you've maxed out that pair. Before then, each pair can only scan each other once.{'\n'}
                 • Only one scan per person per day, resetting at midnight — you can't scan the same person twice in one day for extra points.{'\n'}
                 • Checking into a conference event is worth 50 points.
               </Text>
               <Text style={styles.rulesSectionHeading}>Points → raffle tickets</Text>
               <Text style={styles.rulesText}>
-                Your total points convert to tickets on a curve: your first 5 tickets cost 28 points each, the next 5 cost 35 points each, the next 5 cost 42 points each, and so on — each block of 5 tickets costs 7 more points per ticket than the block before it.
+                Your total points convert into raffle tickets — the more points you earn, the more tickets you get. Early tickets cost less; each additional batch costs a little more than the last, so there's always a reason to keep earning.
               </Text>
               <Text style={styles.rulesSectionHeading}>Assigning tickets</Text>
               <Text style={styles.rulesText}>
@@ -218,7 +218,7 @@ export function RaffleScreen() {
               </Text>
             )}
             <Text style={styles.curveHint}>
-              Your first 5 tickets are 28 points each — every 5 tickets after that cost 7 more points each.
+              The more points you earn, the more tickets — and the better your odds.
             </Text>
           </View>
         }
@@ -366,9 +366,15 @@ function getStyles(colors: ColorScheme) {
     infoButton: { paddingVertical: 12, paddingHorizontal: 12, alignItems: 'flex-end' },
     infoButtonText: { color: colors.textOnDark, fontSize: 20, fontWeight: '700' },
     rulesBackdrop: { flex: 1, backgroundColor: colors.overlay, justifyContent: 'center', padding: 24 },
+    // maxHeight alone doesn't make a ScrollView child actually scroll — a
+    // ScrollView sizes to its own content unless it's given a bounded
+    // height via flex, so it was overflowing the card (visually cut off at
+    // the rounded corner) instead of scrolling. flex: 1 here makes it fill
+    // whatever space is left after the title within rulesCard's maxHeight,
+    // which is what makes internal scrolling kick in.
     rulesCard: { backgroundColor: colors.surface, borderRadius: 16, padding: 20, maxHeight: '80%' },
     rulesTitle: { fontSize: 19, fontFamily: fonts.title, color: colors.text, marginBottom: 12 },
-    rulesScroll: { flexGrow: 0 },
+    rulesScroll: { flex: 1 },
     rulesSectionHeading: { fontSize: 13, fontWeight: '700', color: colors.primary, marginTop: 14 },
     rulesText: { fontSize: 13, color: colors.textSecondary, marginTop: 6, lineHeight: 19 },
     rulesCloseBtn: { marginTop: 16, backgroundColor: colors.primary, borderRadius: 10, paddingVertical: 12, alignItems: 'center' },

@@ -40,7 +40,16 @@ declare
   push_token_id uuid;
   push_token_count int;
   raffle_topup int;
+  -- Whether "today" (real wall-clock, Eastern) is still on/before the
+  -- pre-conference cutoff in 20260905000000_pre_conference_scan_lockout.sql.
+  -- That migration is date-gated, not something this script can fake by
+  -- backdating rows (unlike scan_date, `now()` itself is fixed for this
+  -- whole transaction and reflects the real current date) — so the
+  -- assertions below branch on it, and stay correct both before and after
+  -- the conference starts without needing to be hand-edited later.
+  pre_conference boolean;
 begin
+  pre_conference := (now() at time zone 'America/New_York')::date <= '2026-09-18';
   -- Three throwaway users: two regular, one admin.
   insert into auth.users (instance_id, id, aud, role, email, created_at, updated_at, raw_app_meta_data, raw_user_meta_data)
   values
@@ -468,66 +477,90 @@ begin
   update public.scans set scan_date = scan_date - 1
   where (scanner_id, scanned_id) in ((user_a, user_b), (user_b, user_a));
 
-  set local role authenticated;
-  perform set_config('request.jwt.claims', json_build_object('sub', user_a, 'role', 'authenticated')::text, true);
-  conn_req_1 := public.request_connection(user_b);
-  reset role;
-  set local role authenticated;
-  perform set_config('request.jwt.claims', json_build_object('sub', user_b, 'role', 'authenticated')::text, true);
-  perform public.respond_to_connection_request(conn_req_1, true);
-  reset role;
+  if pre_conference then
+    -- Before the conference starts (see 20260905000000), a pair's 2nd scan
+    -- must be refused outright, no matter how many days have passed since
+    -- the 1st — backdating the existing row doesn't matter here.
+    set local role authenticated;
+    perform set_config('request.jwt.claims', json_build_object('sub', user_a, 'role', 'authenticated')::text, true);
+    insert_succeeded := true;
+    begin
+      perform public.request_connection(user_b);
+      raise exception 'FAIL: was able to request a 2nd scan of the same person before the conference starts';
+    exception
+      when others then
+        if sqlerrm like 'FAIL:%' then raise; end if;
+    end;
+    reset role;
+    raise notice 'PASS: cannot scan the same person a 2nd time before the conference starts (Sept 19)';
 
-  select count(*) into visible_count
-  from public.scans
-  where (scanner_id, scanned_id) in ((user_a, user_b), (user_b, user_a)) and points = 15;
-  if visible_count <> 2 then
-    raise exception 'FAIL: a 2nd scan of the same person on a later day was not worth 15 (got % rows at 15)', visible_count;
+    select count(*) into visible_count from public.scans where (scanner_id, scanned_id) in ((user_a, user_b), (user_b, user_a));
+    if visible_count <> 2 then
+      raise exception 'FAIL: expected exactly 1 scan per direction for A<->B pre-conference (2 rows total), got %', visible_count;
+    end if;
+    raise notice 'PASS: exactly 1 scan total was recorded for the A<->B pair, matching the pre-conference limit';
+  else
+    set local role authenticated;
+    perform set_config('request.jwt.claims', json_build_object('sub', user_a, 'role', 'authenticated')::text, true);
+    conn_req_1 := public.request_connection(user_b);
+    reset role;
+    set local role authenticated;
+    perform set_config('request.jwt.claims', json_build_object('sub', user_b, 'role', 'authenticated')::text, true);
+    perform public.respond_to_connection_request(conn_req_1, true);
+    reset role;
+
+    select count(*) into visible_count
+    from public.scans
+    where (scanner_id, scanned_id) in ((user_a, user_b), (user_b, user_a)) and points = 15;
+    if visible_count <> 2 then
+      raise exception 'FAIL: a 2nd scan of the same person on a later day was not worth 15 (got % rows at 15)', visible_count;
+    end if;
+    raise notice 'PASS: a 2nd scan of the same person on a later day is worth 15 for both people';
+
+    update public.scans set scan_date = scan_date - 1
+    where (scanner_id, scanned_id) in ((user_a, user_b), (user_b, user_a));
+
+    set local role authenticated;
+    perform set_config('request.jwt.claims', json_build_object('sub', user_a, 'role', 'authenticated')::text, true);
+    conn_req_1 := public.request_connection(user_b);
+    reset role;
+    set local role authenticated;
+    perform set_config('request.jwt.claims', json_build_object('sub', user_b, 'role', 'authenticated')::text, true);
+    perform public.respond_to_connection_request(conn_req_1, true);
+    reset role;
+
+    select count(*) into visible_count
+    from public.scans
+    where (scanner_id, scanned_id) in ((user_a, user_b), (user_b, user_a)) and points = 20;
+    if visible_count <> 2 then
+      raise exception 'FAIL: a 3rd scan of the same person on a later day was not worth 20 (got % rows at 20)', visible_count;
+    end if;
+    raise notice 'PASS: a 3rd scan of the same person on a later day is worth 20 for both people';
+
+    -- A 4th scan must be refused even on yet another day — 3 is a hard cap,
+    -- not just a same-day cooldown.
+    update public.scans set scan_date = scan_date - 1
+    where (scanner_id, scanned_id) in ((user_a, user_b), (user_b, user_a));
+
+    set local role authenticated;
+    perform set_config('request.jwt.claims', json_build_object('sub', user_a, 'role', 'authenticated')::text, true);
+    insert_succeeded := true;
+    begin
+      perform public.request_connection(user_b);
+      raise exception 'FAIL: was able to request a 4th scan of the same person';
+    exception
+      when others then
+        if sqlerrm like 'FAIL:%' then raise; end if;
+    end;
+    reset role;
+    raise notice 'PASS: cannot scan the same person a 4th time — 3 is the max';
+
+    select count(*) into visible_count from public.scans where (scanner_id, scanned_id) in ((user_a, user_b), (user_b, user_a));
+    if visible_count <> 6 then
+      raise exception 'FAIL: expected exactly 3 scans per direction for A<->B (6 rows total), got %', visible_count;
+    end if;
+    raise notice 'PASS: exactly 3 scans total were recorded for the A<->B pair, matching the 3-scan max';
   end if;
-  raise notice 'PASS: a 2nd scan of the same person on a later day is worth 15 for both people';
-
-  update public.scans set scan_date = scan_date - 1
-  where (scanner_id, scanned_id) in ((user_a, user_b), (user_b, user_a));
-
-  set local role authenticated;
-  perform set_config('request.jwt.claims', json_build_object('sub', user_a, 'role', 'authenticated')::text, true);
-  conn_req_1 := public.request_connection(user_b);
-  reset role;
-  set local role authenticated;
-  perform set_config('request.jwt.claims', json_build_object('sub', user_b, 'role', 'authenticated')::text, true);
-  perform public.respond_to_connection_request(conn_req_1, true);
-  reset role;
-
-  select count(*) into visible_count
-  from public.scans
-  where (scanner_id, scanned_id) in ((user_a, user_b), (user_b, user_a)) and points = 20;
-  if visible_count <> 2 then
-    raise exception 'FAIL: a 3rd scan of the same person on a later day was not worth 20 (got % rows at 20)', visible_count;
-  end if;
-  raise notice 'PASS: a 3rd scan of the same person on a later day is worth 20 for both people';
-
-  -- A 4th scan must be refused even on yet another day — 3 is a hard cap,
-  -- not just a same-day cooldown.
-  update public.scans set scan_date = scan_date - 1
-  where (scanner_id, scanned_id) in ((user_a, user_b), (user_b, user_a));
-
-  set local role authenticated;
-  perform set_config('request.jwt.claims', json_build_object('sub', user_a, 'role', 'authenticated')::text, true);
-  insert_succeeded := true;
-  begin
-    perform public.request_connection(user_b);
-    raise exception 'FAIL: was able to request a 4th scan of the same person';
-  exception
-    when others then
-      if sqlerrm like 'FAIL:%' then raise; end if;
-  end;
-  reset role;
-  raise notice 'PASS: cannot scan the same person a 4th time — 3 is the max';
-
-  select count(*) into visible_count from public.scans where (scanner_id, scanned_id) in ((user_a, user_b), (user_b, user_a));
-  if visible_count <> 6 then
-    raise exception 'FAIL: expected exactly 3 scans per direction for A<->B (6 rows total), got %', visible_count;
-  end if;
-  raise notice 'PASS: exactly 3 scans total were recorded for the A<->B pair, matching the 3-scan max';
 
   -- record_mutual_scan must no longer be directly callable — otherwise a
   -- modified client could bypass the whole request/accept flow.
@@ -692,13 +725,18 @@ begin
   perform public.respond_to_connection_request(dp_req_id, true);
   reset role;
 
+  -- Pre-conference (see 20260905000000), every scan is a flat 10 regardless
+  -- of a double-points window — that override only applies on/after Sept 19.
   select count(*) into visible_count
   from public.scans
-  where (scanner_id, scanned_id) in ((admin_c, user_d), (user_d, admin_c)) and points = 20;
+  where (scanner_id, scanned_id) in ((admin_c, user_d), (user_d, admin_c))
+    and points = (case when pre_conference then 10 else 20 end);
   if visible_count <> 2 then
-    raise exception 'FAIL: a scan accepted during an active double-points window was not worth 20 (got % rows at 20)', visible_count;
+    raise exception 'FAIL: a scan accepted during an active double-points window was not worth % (got % rows)',
+      (case when pre_conference then 10 else 20 end), visible_count;
   end if;
-  raise notice 'PASS: a scan accepted during an active double-points window is worth 20 for both people';
+  raise notice 'PASS: a scan accepted during an active double-points window is worth % for both people (pre_conference=%)',
+    (case when pre_conference then 10 else 20 end), pre_conference;
 
   -- Overlap prevention: dp_window_id currently spans roughly
   -- [now() - 1 minute, now() + 1 hour). Anything overlapping that range
