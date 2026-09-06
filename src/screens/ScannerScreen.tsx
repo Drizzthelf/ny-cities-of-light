@@ -48,18 +48,22 @@ function easternDateString(d: Date = new Date()): string {
   return `${get('year')}-${get('month')}-${get('day')}`;
 }
 
-// Matches the server-side gate in
-// supabase/migrations/20260905000000_pre_conference_scan_lockout.sql — the
-// conference starts Sept 18, and until then every scan is a flat 10 points
-// with no repeats allowed, regardless of what scan number it'd otherwise be.
-const PRE_CONFERENCE_CUTOFF = '2026-09-18';
+// Matches the server-side gates in
+// supabase/migrations/20260905000000_pre_conference_scan_lockout.sql and
+// 20260905000100_pre_conference_double_points_fix.sql. Two different dates
+// on purpose: the conference starts Sept 18, so double-points windows work
+// normally that day — flat-10 pricing only applies strictly before it. The
+// "no repeat scans" gate is one day later: a pair's 2nd/3rd scan is still
+// blocked through Sept 18, with Sept 19 being the earliest a repeat can happen.
+const PRICING_CUTOFF = '2026-09-17';
+const REPEAT_CUTOFF = '2026-09-18';
 
 // Points for the Nth scan of the same person: 1st is 10 (20 during a
 // double-points window), 2nd and 3rd are flat regardless of double points —
-// except before the conference starts, where every scan is flat 10 (see
-// PRE_CONFERENCE_CUTOFF above).
+// except strictly before the conference starts, where every scan is flat
+// 10 (see PRICING_CUTOFF above).
 function pointsForScanNumber(n: number, doublePointsActive: boolean, todayEt: string): number {
-  if (todayEt <= PRE_CONFERENCE_CUTOFF) return 10;
+  if (todayEt <= PRICING_CUTOFF) return 10;
   if (n === 1) return doublePointsActive ? 20 : 10;
   if (n === 2) return 15;
   return 20;
@@ -270,7 +274,7 @@ export function ScannerScreen() {
 
   const todayEt = easternDateString();
   const maxedOut = priorScanCount >= 3;
-  const tooEarlyForRepeat = priorScanCount >= 1 && todayEt <= PRE_CONFERENCE_CUTOFF;
+  const tooEarlyForRepeat = priorScanCount >= 1 && todayEt <= REPEAT_CUTOFF;
   const scanBlocked = maxedOut || scannedTodayAlready || tooEarlyForRepeat;
   const nextScanPoints = pointsForScanNumber(priorScanCount + 1, doublePointsActive, todayEt);
 
@@ -344,7 +348,7 @@ export function ScannerScreen() {
                 ) : null}
                 {!scanBlocked && (
                   <Text style={styles.pointsHint}>
-                    {priorScanCount === 0 && doublePointsActive && todayEt > PRE_CONFERENCE_CUTOFF
+                    {priorScanCount === 0 && doublePointsActive && todayEt > PRICING_CUTOFF
                       ? '🔥 +20 pts for both of you (2x active!)'
                       : `+${nextScanPoints} pts for both of you`}
                   </Text>

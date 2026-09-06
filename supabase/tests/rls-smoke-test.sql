@@ -40,16 +40,19 @@ declare
   push_token_id uuid;
   push_token_count int;
   raffle_topup int;
-  -- Whether "today" (real wall-clock, Eastern) is still on/before the
-  -- pre-conference cutoff in 20260905000000_pre_conference_scan_lockout.sql.
-  -- That migration is date-gated, not something this script can fake by
+  -- Whether "today" (real wall-clock, Eastern) is still on/before each of
+  -- the two distinct cutoffs in 20260905000000_pre_conference_scan_lockout.sql
+  -- and 20260905000100_pre_conference_double_points_fix.sql. Those
+  -- migrations are date-gated, not something this script can fake by
   -- backdating rows (unlike scan_date, `now()` itself is fixed for this
   -- whole transaction and reflects the real current date) — so the
-  -- assertions below branch on it, and stay correct both before and after
-  -- the conference starts without needing to be hand-edited later.
-  pre_conference boolean;
+  -- assertions below branch on them, and stay correct before, during, and
+  -- after the conference without needing to be hand-edited later.
+  repeat_pre_conference boolean; -- true through Sept 18: a pair's 2nd scan is blocked
+  pricing_pre_conference boolean; -- true through Sept 17: every scan is flat 10
 begin
-  pre_conference := (now() at time zone 'America/New_York')::date <= '2026-09-18';
+  repeat_pre_conference := (now() at time zone 'America/New_York')::date <= '2026-09-18';
+  pricing_pre_conference := (now() at time zone 'America/New_York')::date <= '2026-09-17';
   -- Three throwaway users: two regular, one admin.
   insert into auth.users (instance_id, id, aud, role, email, created_at, updated_at, raw_app_meta_data, raw_user_meta_data)
   values
@@ -477,7 +480,7 @@ begin
   update public.scans set scan_date = scan_date - 1
   where (scanner_id, scanned_id) in ((user_a, user_b), (user_b, user_a));
 
-  if pre_conference then
+  if repeat_pre_conference then
     -- Before the conference starts (see 20260905000000), a pair's 2nd scan
     -- must be refused outright, no matter how many days have passed since
     -- the 1st — backdating the existing row doesn't matter here.
@@ -725,18 +728,19 @@ begin
   perform public.respond_to_connection_request(dp_req_id, true);
   reset role;
 
-  -- Pre-conference (see 20260905000000), every scan is a flat 10 regardless
-  -- of a double-points window — that override only applies on/after Sept 19.
+  -- Strictly before Sept 18 (see 20260905000100), every scan is a flat 10
+  -- regardless of a double-points window — from Sept 18 (conference start)
+  -- onward, double points work normally.
   select count(*) into visible_count
   from public.scans
   where (scanner_id, scanned_id) in ((admin_c, user_d), (user_d, admin_c))
-    and points = (case when pre_conference then 10 else 20 end);
+    and points = (case when pricing_pre_conference then 10 else 20 end);
   if visible_count <> 2 then
     raise exception 'FAIL: a scan accepted during an active double-points window was not worth % (got % rows)',
-      (case when pre_conference then 10 else 20 end), visible_count;
+      (case when pricing_pre_conference then 10 else 20 end), visible_count;
   end if;
-  raise notice 'PASS: a scan accepted during an active double-points window is worth % for both people (pre_conference=%)',
-    (case when pre_conference then 10 else 20 end), pre_conference;
+  raise notice 'PASS: a scan accepted during an active double-points window is worth % for both people (pricing_pre_conference=%)',
+    (case when pricing_pre_conference then 10 else 20 end), pricing_pre_conference;
 
   -- Overlap prevention: dp_window_id currently spans roughly
   -- [now() - 1 minute, now() + 1 hour). Anything overlapping that range
