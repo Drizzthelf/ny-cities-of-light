@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Linking, Platform, RefreshControl, SectionList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -6,10 +6,16 @@ import { supabase } from '../lib/supabase';
 import { useTheme } from '../context/ThemeContext';
 import { EventRow } from '../components/EventRow';
 import { EventDetailModal } from '../components/EventDetailModal';
+import { CachedDataBanner } from '../components/CachedDataBanner';
+import { readCache, writeCache } from '../lib/offlineCache';
 import type { Event } from '../types/database';
 import { fonts, type ColorScheme } from '../theme';
 
 type Section = { title: string; data: Event[] };
+
+// Same for every attendee (not personal data), so a fixed cache namespace
+// is fine — no per-user scoping needed the way Home/Contacts have.
+const CACHE_USER = 'shared';
 
 function dateKey(iso: string) {
   return new Date(iso).toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' });
@@ -41,23 +47,43 @@ export function ScheduleScreen() {
   const [sections, setSections] = useState<Section[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
+  const [cacheSavedAt, setCacheSavedAt] = useState<number | null>(null);
+  const freshRef = useRef(false);
 
   const load = useCallback(async () => {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('events')
       .select('*')
       .order('start_time', { ascending: true });
+    // On failure, leave whatever's already on screen (fresh or cached)
+    // instead of clearing the list out to empty.
+    if (error || !data) return;
 
     const grouped: Record<string, Event[]> = {};
-    for (const event of (data ?? []) as Event[]) {
+    for (const event of data as Event[]) {
       const day = dateKey(event.start_time);
       if (!grouped[day]) grouped[day] = [];
       grouped[day].push(event);
     }
-    setSections(Object.entries(grouped).map(([title, data]) => ({ title, data })));
+    const groupedSections = Object.entries(grouped).map(([title, data]) => ({ title, data }));
+    freshRef.current = true;
+    setCacheSavedAt(null);
+    setSections(groupedSections);
+    writeCache<Section[]>('schedule-events', CACHE_USER, groupedSections);
   }, []);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
+
+  useEffect(() => {
+    freshRef.current = false;
+    let cancelled = false;
+    readCache<Section[]>('schedule-events', CACHE_USER).then((cached) => {
+      if (cancelled || !cached || freshRef.current) return;
+      setSections(cached.data);
+      setCacheSavedAt(cached.savedAt);
+    });
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
     // See HomeScreen.tsx's double-points-windows effect for why this guard
@@ -99,6 +125,7 @@ export function ScheduleScreen() {
               </Text>
               <Text style={styles.headerCitation}>— Ecclesiastes 3:1</Text>
             </View>
+            <CachedDataBanner savedAt={cacheSavedAt} style={styles.cacheBanner} />
             <TouchableOpacity style={styles.venuesButton} onPress={() => navigation.navigate('Venues')}>
               <Text style={styles.venuesButtonText}>View all venues</Text>
               <Text style={styles.venuesButtonArrow}>›</Text>
@@ -132,6 +159,7 @@ function getStyles(colors: ColorScheme) {
     container: { flex: 1, backgroundColor: colors.background },
     content: { paddingBottom: 32 },
     empty: { textAlign: 'center', marginTop: 60, color: colors.textFaint, fontSize: 15 },
+    cacheBanner: { marginTop: 12 },
     header: {
       // panelDark, not colors.text — this header is deliberately black in
       // both modes, not "page text color" that happens to be black in

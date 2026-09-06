@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { AppState } from 'react-native';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
+import { clearAllCaches } from '../lib/offlineCache';
 import type { Profile } from '../types/database';
 
 type AuthState = {
@@ -82,6 +83,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   async function signOut() {
     await supabase.auth.signOut();
     setPendingRegistrationCode(null);
+    // So a different account signing in on this same device afterward can
+    // never see this account's cached Home/Schedule/Contacts/Announcements
+    // data, not even momentarily before a fresh fetch lands.
+    await clearAllCaches();
   }
 
   async function deleteAccount(): Promise<{ error: string | null }> {
@@ -96,6 +101,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // this just clears the now-orphaned local session/token immediately
     // instead of waiting for it to fail naturally on the next API call.
     await supabase.auth.signOut();
+    await clearAllCaches();
     return { error: null };
   }
 

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   FlatList,
@@ -15,13 +15,16 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { Avatar } from '../components/Avatar';
+import { CachedDataBanner } from '../components/CachedDataBanner';
 import { ReportModal } from '../components/ReportModal';
 import { ScreenHeader } from '../components/ScreenHeader';
+import { readCache, writeCache } from '../lib/offlineCache';
 import type { Profile, SocialPlatform } from '../types/database';
 import { type ColorScheme } from '../theme';
 
 type Row = Profile & { scanned_at: string; scan_count: number; last_scan_date: string };
 type ViewMode = 'all' | 'favorites';
+type ContactsCache = { rows: Row[]; favoriteIds: string[] };
 
 // "Today" per the conference's own clock (America/New_York), matching
 // scans.scan_date's day boundary — see
@@ -50,10 +53,12 @@ export function ContactsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [reporting, setReporting] = useState<Row | null>(null);
   const [selected, setSelected] = useState<Row | null>(null);
+  const [cacheSavedAt, setCacheSavedAt] = useState<number | null>(null);
+  const freshRef = useRef(false);
 
   const load = useCallback(async () => {
     if (!session?.user) return;
-    const [{ data: scanData }, { data: favData }] = await Promise.all([
+    const [{ data: scanData, error: scanError }, { data: favData }] = await Promise.all([
       supabase
         .from('scans')
         .select('created_at, scan_date, scanned:profiles!scans_scanned_id_fkey(*, profile_socials(*))')
@@ -61,11 +66,15 @@ export function ContactsScreen() {
         .order('created_at', { ascending: false }),
       supabase.from('favorites').select('contact_id').eq('user_id', session.user.id),
     ]);
+    // On failure, leave whatever's already on screen (fresh or cached)
+    // instead of clearing the contacts list out to empty.
+    if (scanError || !scanData) return;
+
     // One scans row per scan event now (up to 3 per contact, one per day
     // scanned), not one per contact — collapse to one Row per contact,
     // counting events and keeping the most recent scanned_at/scan_date.
     const byContact = new Map<string, Row>();
-    for (const r of (scanData ?? []) as any[]) {
+    for (const r of scanData as any[]) {
       const scanned = r.scanned as Profile;
       const existing = byContact.get(scanned.id);
       if (existing) {
@@ -82,8 +91,25 @@ export function ContactsScreen() {
       }
     }
     const mapped = [...byContact.values()].sort((a, b) => b.scanned_at.localeCompare(a.scanned_at));
+    const favIds = new Set((favData ?? []).map((f: any) => f.contact_id as string));
+    freshRef.current = true;
+    setCacheSavedAt(null);
     setRows(mapped);
-    setFavoriteIds(new Set((favData ?? []).map((f: any) => f.contact_id as string)));
+    setFavoriteIds(favIds);
+    writeCache<ContactsCache>('contacts', session.user.id, { rows: mapped, favoriteIds: [...favIds] });
+  }, [session?.user]);
+
+  useEffect(() => {
+    if (!session?.user) return;
+    freshRef.current = false;
+    let cancelled = false;
+    readCache<ContactsCache>('contacts', session.user.id).then((cached) => {
+      if (cancelled || !cached || freshRef.current) return;
+      setRows(cached.data.rows);
+      setFavoriteIds(new Set(cached.data.favoriteIds));
+      setCacheSavedAt(cached.savedAt);
+    });
+    return () => { cancelled = true; };
   }, [session?.user]);
 
   useEffect(() => {
@@ -164,6 +190,8 @@ export function ContactsScreen() {
           <Text style={[styles.tabText, viewMode === 'favorites' && styles.tabTextActive]}>★ Favorites ({favoritesCount})</Text>
         </TouchableOpacity>
       </View>
+
+      <CachedDataBanner savedAt={cacheSavedAt} />
 
       <TextInput
         style={styles.searchInput}

@@ -1,12 +1,18 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
+import { readCache, writeCache } from '../lib/offlineCache';
+import { CachedDataBanner } from '../components/CachedDataBanner';
 import type { Announcement } from '../types/database';
 import { fonts, type ColorScheme } from '../theme';
 import { useTheme } from '../context/ThemeContext';
 
 type Row = Announcement & { admin: { first_name: string } | null };
+
+// Same feed for every attendee (not personal data), so a fixed cache
+// namespace is fine — no per-user scoping needed.
+const CACHE_USER = 'shared';
 
 function timeAgo(iso: string) {
   const diff = Date.now() - new Date(iso).getTime();
@@ -24,16 +30,31 @@ export function AnnouncementsScreen() {
   const styles = useMemo(() => getStyles(colors), [colors]);
   const [rows, setRows] = useState<Row[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [cacheSavedAt, setCacheSavedAt] = useState<number | null>(null);
+  const freshRef = useRef(false);
 
   const load = useCallback(async () => {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('announcements')
       .select('*, admin:profiles!announcements_admin_id_fkey(first_name)')
       .order('created_at', { ascending: false });
-    setRows((data ?? []) as Row[]);
+    // On failure, leave whatever's already on screen (fresh or cached)
+    // instead of clearing the feed out to empty.
+    if (error || !data) return;
+    freshRef.current = true;
+    setCacheSavedAt(null);
+    setRows(data as Row[]);
+    writeCache<Row[]>('announcements-feed', CACHE_USER, data as Row[]);
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
+    readCache<Row[]>('announcements-feed', CACHE_USER).then((cached) => {
+      if (cancelled || !cached || freshRef.current) return;
+      setRows(cached.data);
+      setCacheSavedAt(cached.savedAt);
+    });
+
     load();
     // See HomeScreen.tsx's double-points-windows effect for why this guard
     // exists — a fast unmount/remount (e.g. rapid tab switching) can hand
@@ -47,7 +68,10 @@ export function AnnouncementsScreen() {
       .channel('announcements-feed')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'announcements' }, load)
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    return () => {
+      cancelled = true;
+      supabase.removeChannel(channel);
+    };
   }, [load]);
 
   async function onRefresh() {
@@ -64,13 +88,16 @@ export function AnnouncementsScreen() {
       keyExtractor={(item) => item.id}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       ListHeaderComponent={
-        <View style={[styles.header, { paddingTop: top + -2 }]}>
-          <Text style={styles.headerTitle}>Updates</Text>
-          <Text style={styles.headerQuote}>
-            "We have this hope as an anchor for the soul, firm and secure."
-          </Text>
-          <Text style={styles.headerCitation}>— Hebrews 6:19</Text>
-        </View>
+        <>
+          <View style={[styles.header, { paddingTop: top + -2 }]}>
+            <Text style={styles.headerTitle}>Updates</Text>
+            <Text style={styles.headerQuote}>
+              "We have this hope as an anchor for the soul, firm and secure."
+            </Text>
+            <Text style={styles.headerCitation}>— Hebrews 6:19</Text>
+          </View>
+          <CachedDataBanner savedAt={cacheSavedAt} style={styles.cacheBanner} />
+        </>
       }
       ListEmptyComponent={
         <View style={styles.emptyBox}>
@@ -110,6 +137,7 @@ function getStyles(colors: ColorScheme) {
     headerTitle: { fontSize: 30, fontFamily: fonts.title, color: colors.textOnDark },
     headerQuote: { fontSize: 13, color: '#c7c2b4', marginTop: 6, fontStyle: 'italic', lineHeight: 18 },
     headerCitation: { fontSize: 12, color: '#9a9689', marginTop: 4 },
+    cacheBanner: { marginTop: 14 },
     emptyBox: { padding: 40, alignItems: 'center' },
     emptyTitle: { fontSize: 17, fontWeight: '600', color: colors.textSecondary, marginBottom: 8 },
     emptySub: { fontSize: 14, color: colors.textFaint, textAlign: 'center', lineHeight: 20 },
