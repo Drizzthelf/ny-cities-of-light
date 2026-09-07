@@ -10,7 +10,8 @@
       "environment": "development"
     },
     "staging": {
-      "distribution": "internal",
+      "distribution": "store",
+      "autoIncrement": true,
       "environment": "preview",
       "channel": "staging"
     },
@@ -21,6 +22,11 @@
     }
   },
   "submit": {
+    "staging": {
+      "ios": {
+        "ascAppId": "6808494791"
+      }
+    },
     "production": {
       "ios": {
         "ascAppId": "6808494791"
