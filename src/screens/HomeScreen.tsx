@@ -43,6 +43,11 @@ export function HomeScreen() {
   // checked before the cache-read result is ever applied, so a slow cache
   // read can't clobber fresher data that already landed.
   const freshCountsRef = useRef(false);
+  // Timestamp of the last data we actually know is good — from either a
+  // successful live load or the on-mount cache read. Lets a *failed*
+  // load (including a manual pull, on screens that have one) show
+  // "showing saved data from Xm ago" instead of silently doing nothing.
+  const lastGoodAtRef = useRef<number | null>(null);
 
   // Points math (10/scan, +20 during a double-points window, 50/event) lives
   // in one place — the leaderboard view — instead of being duplicated here.
@@ -58,8 +63,12 @@ export function HomeScreen() {
     // On failure, leave whatever's currently shown (fresh or cached) alone
     // rather than blanking it to 0 — that was the actual bug this cache
     // layer exists to fix, not just a missing nicety.
-    if (error || !data) return;
+    if (error || !data) {
+      setCacheSavedAt(lastGoodAtRef.current);
+      return;
+    }
     freshCountsRef.current = true;
+    lastGoodAtRef.current = Date.now();
     setCacheSavedAt(null);
     setScanCount(data.scan_count);
     setCheckinCount(data.event_count);
@@ -126,6 +135,7 @@ export function HomeScreen() {
       setCheckinCount(cached.data.checkinCount);
       setPoints(cached.data.points);
       setCacheSavedAt(cached.savedAt);
+      lastGoodAtRef.current = cached.savedAt;
     });
 
     loadCounts();
@@ -174,7 +184,15 @@ export function HomeScreen() {
       )}
 
       <View style={styles.qrBox}>
-        <QRCode value={profile.id} size={200} />
+        {/* Embeds first name alongside the id — ScannerScreen.tsx can then
+            show who you scanned immediately, with zero network calls, which
+            matters when venue wifi is unreliable. Deliberately just the
+            name, not a photo or social handles: keeps the code small enough
+            to scan reliably, and avoids putting more of someone's identity
+            into a payload that could be screenshotted/shared outside the
+            app. Generated fresh from live profile state on every render, so
+            there's no staleness concern from an edited name. */}
+        <QRCode value={JSON.stringify({ id: profile.id, n: profile.first_name })} size={200} />
       </View>
       <Text style={styles.hint}>Let someone scan this to connect.</Text>
 

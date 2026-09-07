@@ -1,47 +1,77 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   FlatList,
-  RefreshControl,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { Avatar } from '../components/Avatar';
 import { ScreenHeader } from '../components/ScreenHeader';
+import { readCache, writeCache } from '../lib/offlineCache';
 import type { LeaderboardRow } from '../types/database';
 import { type ColorScheme } from '../theme';
 
 const MEDALS = ['🥇', '🥈', '🥉'];
+const HOUR_MS = 60 * 60 * 1000;
+// Same feed for every attendee (not personal data), so a fixed cache
+// namespace is fine — no per-user scoping needed, same as
+// Schedule/Announcements.
+const CACHE_USER = 'shared';
 
 export function LeaderboardScreen() {
   const { session } = useAuth();
   const { colors } = useTheme();
   const styles = useMemo(() => getStyles(colors), [colors]);
   const [rows, setRows] = useState<LeaderboardRow[]>([]);
-  const [refreshing, setRefreshing] = useState(false);
+  const [updatedAt, setUpdatedAt] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     const { data } = await supabase.from('leaderboard').select('*').limit(10);
-    setRows((data ?? []) as LeaderboardRow[]);
+    if (!data) return;
+    const typed = data as LeaderboardRow[];
+    setRows(typed);
+    setUpdatedAt(Date.now());
+    writeCache<LeaderboardRow[]>('leaderboard', CACHE_USER, typed);
   }, []);
 
-  // No realtime subscription here on purpose — unlike HomeScreen's own-scan
-  // count, rankings are relative to everyone, so there's no per-user filter
-  // that would avoid broadcasting every attendee's scan to every client with
-  // this tab open. Reloading on focus (instead) is the cheap middle ground:
-  // fresh data whenever the user actually looks at this screen, with zero
-  // realtime cost. See docs/production-launch-plan.md §4.
-  useFocusEffect(useCallback(() => { load(); }, [load]));
+  // Deliberately NOT refetched on focus or pull-to-refresh anymore, per
+  // user decision — standings now update on a fixed hourly cadence and
+  // stay static in between, regardless of how often someone looks at or
+  // pulls on this screen. On mount, use the cached snapshot if it's still
+  // within the hour (schedules the next tick for whenever that hour is
+  // actually up); otherwise fetch immediately and start a fresh hourly
+  // cycle from now.
+  useEffect(() => {
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout>;
 
-  async function onRefresh() {
-    setRefreshing(true);
-    await load();
-    setRefreshing(false);
-  }
+    async function tick() {
+      await load();
+      if (!cancelled) timer = setTimeout(tick, HOUR_MS);
+    }
+
+    readCache<LeaderboardRow[]>('leaderboard', CACHE_USER).then((cached) => {
+      if (cancelled) return;
+      if (cached) {
+        setRows(cached.data);
+        setUpdatedAt(cached.savedAt);
+      }
+      const age = cached ? Date.now() - cached.savedAt : Infinity;
+      if (age >= HOUR_MS) {
+        tick();
+      } else {
+        timer = setTimeout(tick, HOUR_MS - age);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [load]);
 
   return (
     <View style={styles.screen}>
@@ -51,12 +81,12 @@ export function LeaderboardScreen() {
         contentContainerStyle={styles.list}
         data={rows}
         keyExtractor={(item) => item.id}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         ListHeaderComponent={
           <View style={styles.legend}>
             <Text style={styles.legendText}>10 pts per contact (20 during 2x windows) · 50 pts per event</Text>
             <Text style={styles.legendHint}>
-              Standings aren't live — pull down to refresh for the latest.
+              Standings update about once an hour
+              {updatedAt ? ` · last updated ${new Date(updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}
             </Text>
           </View>
         }

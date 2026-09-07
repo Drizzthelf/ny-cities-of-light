@@ -24,6 +24,7 @@ import { PrivacyPolicyScreen } from '../screens/PrivacyPolicyScreen';
 import { IncomingConnectionRequestListener } from '../components/IncomingConnectionRequestListener';
 import { RaffleWinListener } from '../components/RaffleWinListener';
 import { PushNotificationRegistrar } from '../components/PushNotificationRegistrar';
+import { OutboxFlusher } from '../components/OutboxFlusher';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -236,6 +237,7 @@ export function RootNavigator() {
           <IncomingConnectionRequestListener />
           <RaffleWinListener />
           <PushNotificationRegistrar />
+          <OutboxFlusher />
         </>
       )}
     </NavigationContainer>

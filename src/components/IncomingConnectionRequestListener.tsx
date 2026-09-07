@@ -7,11 +7,18 @@ import { Avatar } from './Avatar';
 import type { Profile } from '../types/database';
 import { fonts, type ColorScheme } from '../theme';
 
-// Matches the server-side expiry in
-// supabase/migrations/20260823000000_connection_requests.sql. Mounted once,
-// globally (see RootNavigator.tsx) — not inside ScannerScreen — because the
-// person being scanned is usually sitting on their Home screen showing
-// their own QR, not on the scanner screen themselves.
+// Just a local "don't leave this modal up forever if it's ignored" timer,
+// unrelated to how long the request stays acceptable server-side (a day —
+// see supabase/migrations/20260906000000_async_connection_requests.sql). If
+// this dismisses before anyone taps anything, the request is still sitting
+// there, pending, in the recipient's Requests tab (ContactsScreen.tsx) — it
+// isn't lost. Mounted once, globally (see RootNavigator.tsx) — not inside
+// ScannerScreen — because the person being scanned is usually sitting on
+// their Home screen showing their own QR, not on the scanner screen
+// themselves. Note this only fires for someone who has the app open at the
+// exact moment the request is created (a live Realtime INSERT) — anyone
+// who wasn't finds the request waiting in their Requests tab instead,
+// which is the durable path, this is just the instant-if-you're-here bonus.
 const EXPIRY_MS = 2 * 60 * 1000;
 
 export function IncomingConnectionRequestListener() {
@@ -78,8 +85,8 @@ export function IncomingConnectionRequestListener() {
     if (error) {
       Alert.alert(accept ? 'Could not accept' : 'Could not decline', error.message);
     } else if (accept && data === 'expired') {
-      // Rare edge case: the tap landed right as the 2-minute window closed —
-      // the RPC round-trip itself pushed it past expiry.
+      // Rare edge case: the tap landed right as the request's day-long
+      // window closed — the RPC round-trip itself pushed it past expiry.
       Alert.alert('Request expired', 'This request just expired — ask them to scan again.');
     }
     if (timeoutRef.current) clearTimeout(timeoutRef.current);

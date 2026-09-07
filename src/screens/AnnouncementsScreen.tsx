@@ -32,6 +32,11 @@ export function AnnouncementsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [cacheSavedAt, setCacheSavedAt] = useState<number | null>(null);
   const freshRef = useRef(false);
+  // Timestamp of the last data we actually know is good — from either a
+  // successful live load or the on-mount cache read. Lets a *failed*
+  // pull-to-refresh show "showing saved data from Xm ago" instead of
+  // silently doing nothing and looking like the refresh worked.
+  const lastGoodAtRef = useRef<number | null>(null);
 
   const load = useCallback(async () => {
     const { data, error } = await supabase
@@ -39,9 +44,14 @@ export function AnnouncementsScreen() {
       .select('*, admin:profiles!announcements_admin_id_fkey(first_name)')
       .order('created_at', { ascending: false });
     // On failure, leave whatever's already on screen (fresh or cached)
-    // instead of clearing the feed out to empty.
-    if (error || !data) return;
+    // instead of clearing the feed out to empty — but still surface that
+    // it didn't refresh, via the last-known-good timestamp.
+    if (error || !data) {
+      setCacheSavedAt(lastGoodAtRef.current);
+      return;
+    }
     freshRef.current = true;
+    lastGoodAtRef.current = Date.now();
     setCacheSavedAt(null);
     setRows(data as Row[]);
     writeCache<Row[]>('announcements-feed', CACHE_USER, data as Row[]);
@@ -53,6 +63,7 @@ export function AnnouncementsScreen() {
       if (cancelled || !cached || freshRef.current) return;
       setRows(cached.data);
       setCacheSavedAt(cached.savedAt);
+      lastGoodAtRef.current = cached.savedAt;
     });
 
     load();

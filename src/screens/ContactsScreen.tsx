@@ -19,12 +19,22 @@ import { CachedDataBanner } from '../components/CachedDataBanner';
 import { ReportModal } from '../components/ReportModal';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { readCache, writeCache } from '../lib/offlineCache';
-import type { Profile, SocialPlatform } from '../types/database';
+import type { ConnectionRequest, Profile, SocialPlatform } from '../types/database';
 import { type ColorScheme } from '../theme';
 
 type Row = Profile & { scanned_at: string; scan_count: number; last_scan_date: string };
-type ViewMode = 'all' | 'favorites';
+type ViewMode = 'all' | 'favorites' | 'requests';
 type ContactsCache = { rows: Row[]; favoriteIds: string[] };
+type SentRow = ConnectionRequest & { target: Profile };
+type ReceivedRow = ConnectionRequest & { requester: Profile };
+type RequestsCache = { sent: SentRow[]; received: ReceivedRow[] };
+
+const STATUS_LABELS: Record<ConnectionRequest['status'], string> = {
+  pending: 'Pending',
+  accepted: 'Accepted',
+  declined: 'Declined',
+  expired: 'Expired',
+};
 
 // "Today" per the conference's own clock (America/New_York), matching
 // scans.scan_date's day boundary — see
@@ -55,6 +65,18 @@ export function ContactsScreen() {
   const [selected, setSelected] = useState<Row | null>(null);
   const [cacheSavedAt, setCacheSavedAt] = useState<number | null>(null);
   const freshRef = useRef(false);
+  // Timestamp of the last data we actually know is good — from either a
+  // successful live load or the on-mount cache read. Lets a *failed*
+  // pull-to-refresh show "showing saved data from Xm ago" instead of
+  // silently doing nothing and looking like the refresh worked.
+  const lastGoodAtRef = useRef<number | null>(null);
+
+  const [sentRequests, setSentRequests] = useState<SentRow[]>([]);
+  const [receivedRequests, setReceivedRequests] = useState<ReceivedRow[]>([]);
+  const [respondingId, setRespondingId] = useState<string | null>(null);
+  const [requestsCacheSavedAt, setRequestsCacheSavedAt] = useState<number | null>(null);
+  const requestsFreshRef = useRef(false);
+  const requestsLastGoodAtRef = useRef<number | null>(null);
 
   const load = useCallback(async () => {
     if (!session?.user) return;
@@ -67,8 +89,12 @@ export function ContactsScreen() {
       supabase.from('favorites').select('contact_id').eq('user_id', session.user.id),
     ]);
     // On failure, leave whatever's already on screen (fresh or cached)
-    // instead of clearing the contacts list out to empty.
-    if (scanError || !scanData) return;
+    // instead of clearing the contacts list out to empty — but still
+    // surface that it didn't refresh, via the last-known-good timestamp.
+    if (scanError || !scanData) {
+      setCacheSavedAt(lastGoodAtRef.current);
+      return;
+    }
 
     // One scans row per scan event now (up to 3 per contact, one per day
     // scanned), not one per contact — collapse to one Row per contact,
@@ -93,6 +119,7 @@ export function ContactsScreen() {
     const mapped = [...byContact.values()].sort((a, b) => b.scanned_at.localeCompare(a.scanned_at));
     const favIds = new Set((favData ?? []).map((f: any) => f.contact_id as string));
     freshRef.current = true;
+    lastGoodAtRef.current = Date.now();
     setCacheSavedAt(null);
     setRows(mapped);
     setFavoriteIds(favIds);
@@ -108,6 +135,7 @@ export function ContactsScreen() {
       setRows(cached.data.rows);
       setFavoriteIds(new Set(cached.data.favoriteIds));
       setCacheSavedAt(cached.savedAt);
+      lastGoodAtRef.current = cached.savedAt;
     });
     return () => { cancelled = true; };
   }, [session?.user]);
@@ -116,9 +144,107 @@ export function ContactsScreen() {
     load();
   }, [load]);
 
+  // Sent: every request I've made, any status, newest first — a running
+  // history. Received: only 'pending' ones — the "requests" enum has no
+  // path back out of pending except accepted/declined/expired, so a
+  // resolved one dropping out of this list once acted on is expected, not
+  // a bug.
+  const loadRequests = useCallback(async () => {
+    if (!session?.user) return;
+    const [{ data: sent, error: sentError }, { data: received, error: receivedError }] = await Promise.all([
+      supabase
+        .from('connection_requests')
+        .select('*, target:profiles!connection_requests_target_id_fkey(*, profile_socials(*))')
+        .eq('requester_id', session.user.id)
+        .order('created_at', { ascending: false }),
+      supabase
+        .from('connection_requests')
+        .select('*, requester:profiles!connection_requests_requester_id_fkey(*, profile_socials(*))')
+        .eq('target_id', session.user.id)
+        .eq('status', 'pending')
+        .order('created_at', { ascending: false }),
+    ]);
+    if (sentError || receivedError || !sent || !received) {
+      setRequestsCacheSavedAt(requestsLastGoodAtRef.current);
+      return;
+    }
+    requestsFreshRef.current = true;
+    requestsLastGoodAtRef.current = Date.now();
+    setRequestsCacheSavedAt(null);
+    setSentRequests(sent as SentRow[]);
+    setReceivedRequests(received as ReceivedRow[]);
+    writeCache<RequestsCache>('connection-requests', session.user.id, {
+      sent: sent as SentRow[],
+      received: received as ReceivedRow[],
+    });
+  }, [session?.user]);
+
+  useEffect(() => {
+    if (!session?.user) return;
+    requestsFreshRef.current = false;
+    let cancelled = false;
+    readCache<RequestsCache>('connection-requests', session.user.id).then((cached) => {
+      if (cancelled || !cached || requestsFreshRef.current) return;
+      setSentRequests(cached.data.sent);
+      setReceivedRequests(cached.data.received);
+      setRequestsCacheSavedAt(cached.savedAt);
+      requestsLastGoodAtRef.current = cached.savedAt;
+    });
+    return () => { cancelled = true; };
+  }, [session?.user]);
+
+  useEffect(() => {
+    loadRequests();
+  }, [loadRequests]);
+
+  // Live-updates the Received list the moment a new request arrives, or an
+  // existing one resolves some other way (e.g. it expired via the
+  // pg_cron sweep) — without this, a request sent while this tab is open
+  // wouldn't show up until the next manual refresh.
+  useEffect(() => {
+    if (!session?.user) return;
+    supabase
+      .getChannels()
+      .filter((c) => c.topic === 'realtime:my-connection-requests')
+      .forEach((c) => supabase.removeChannel(c));
+    const channel = supabase
+      .channel('my-connection-requests')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'connection_requests', filter: `target_id=eq.${session.user.id}` },
+        loadRequests
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'connection_requests', filter: `requester_id=eq.${session.user.id}` },
+        loadRequests
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [session?.user, loadRequests]);
+
+  async function respondToRequest(requestId: string, accept: boolean) {
+    setRespondingId(requestId);
+    const { data, error } = await supabase.rpc('respond_to_connection_request', {
+      p_request_id: requestId,
+      p_accept: accept,
+    });
+    setRespondingId(null);
+    if (error) {
+      Alert.alert(accept ? 'Could not accept' : 'Could not decline', error.message);
+      return;
+    }
+    if (accept && data === 'expired') {
+      Alert.alert('Request expired', 'This request expired before you responded.');
+    }
+    await loadRequests();
+    if (accept) await load();
+  }
+
   async function onRefresh() {
     setRefreshing(true);
-    await load();
+    if (viewMode === 'requests') await loadRequests();
+    else await load();
     setRefreshing(false);
   }
 
@@ -189,20 +315,97 @@ export function ContactsScreen() {
         >
           <Text style={[styles.tabText, viewMode === 'favorites' && styles.tabTextActive]}>★ Favorites ({favoritesCount})</Text>
         </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tab, viewMode === 'requests' && styles.tabActive]}
+          onPress={() => setViewMode('requests')}
+        >
+          <Text style={[styles.tabText, viewMode === 'requests' && styles.tabTextActive]}>Requests ({receivedRequests.length})</Text>
+        </TouchableOpacity>
       </View>
 
-      <CachedDataBanner savedAt={cacheSavedAt} />
+      {viewMode === 'requests' ? (
+        <CachedDataBanner savedAt={requestsCacheSavedAt} />
+      ) : (
+        <CachedDataBanner savedAt={cacheSavedAt} />
+      )}
 
-      <TextInput
-        style={styles.searchInput}
-        value={search}
-        onChangeText={setSearch}
-        placeholder="Search by name or handle"
-        placeholderTextColor={colors.textFaint}
-        autoCapitalize="none"
-        autoCorrect={false}
-      />
+      {viewMode !== 'requests' && (
+        <TextInput
+          style={styles.searchInput}
+          value={search}
+          onChangeText={setSearch}
+          placeholder="Search by name or handle"
+          placeholderTextColor={colors.textFaint}
+          autoCapitalize="none"
+          autoCorrect={false}
+        />
+      )}
 
+      {viewMode === 'requests' ? (
+        <FlatList
+          style={styles.container}
+          contentContainerStyle={styles.list}
+          data={receivedRequests}
+          keyExtractor={(item) => item.id}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+          ListHeaderComponent={
+            receivedRequests.length > 0 ? (
+              <Text style={styles.requestsSectionTitle}>Needs your response</Text>
+            ) : null
+          }
+          ListEmptyComponent={
+            <Text style={styles.emptyText}>No pending requests need your response right now.</Text>
+          }
+          renderItem={({ item }) => (
+            <View style={styles.requestRow}>
+              <Avatar photoUrl={item.requester.photo_url} name={item.requester.first_name} size={48} />
+              <View style={styles.rowText}>
+                <Text style={styles.name}>{item.requester.first_name}</Text>
+                <Text style={styles.requestMeta}>wants to connect</Text>
+              </View>
+              <View style={styles.requestActions}>
+                <TouchableOpacity
+                  style={[styles.requestBtn, styles.requestBtnDecline]}
+                  onPress={() => respondToRequest(item.id, false)}
+                  disabled={respondingId === item.id}
+                >
+                  <Text style={styles.requestBtnDeclineText}>Decline</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.requestBtn, styles.requestBtnAccept]}
+                  onPress={() => respondToRequest(item.id, true)}
+                  disabled={respondingId === item.id}
+                >
+                  <Text style={styles.requestBtnAcceptText}>
+                    {respondingId === item.id ? '...' : 'Accept'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+          ListFooterComponent={
+            <>
+              <Text style={styles.requestsSectionTitle}>Sent by you</Text>
+              {sentRequests.length === 0 ? (
+                <Text style={styles.emptyText}>You haven't sent any connection requests yet.</Text>
+              ) : (
+                sentRequests.map((item) => (
+                  <View key={item.id} style={styles.requestRow}>
+                    <Avatar photoUrl={item.target.photo_url} name={item.target.first_name} size={48} />
+                    <View style={styles.rowText}>
+                      <Text style={styles.name}>{item.target.first_name}</Text>
+                      <Text style={styles.requestMeta}>{new Date(item.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' })}</Text>
+                    </View>
+                    <Text style={[styles.statusBadge, styles[`statusBadge_${item.status}`]]}>
+                      {STATUS_LABELS[item.status]}
+                    </Text>
+                  </View>
+                ))
+              )}
+            </>
+          }
+        />
+      ) : (
       <FlatList
         style={styles.container}
         contentContainerStyle={visibleRows.length === 0 ? styles.empty : styles.list}
@@ -243,6 +446,7 @@ export function ContactsScreen() {
           </TouchableOpacity>
         )}
       />
+      )}
 
       <Modal visible={!!selected} transparent animationType="fade" onRequestClose={() => setSelected(null)}>
         <TouchableOpacity style={styles.detailBackdrop} activeOpacity={1} onPress={() => setSelected(null)}>
@@ -344,6 +548,35 @@ function getStyles(colors: ColorScheme) {
     scanCountText: { fontSize: 13, fontWeight: '600', color: colors.textMuted },
     starButton: { paddingHorizontal: 8, paddingVertical: 4 },
     starButtonText: { fontSize: 22, color: colors.highlight },
+    requestsSectionTitle: {
+      fontSize: 12,
+      fontWeight: '700',
+      color: colors.textFaint,
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+      marginBottom: 8,
+      marginTop: 4,
+    },
+    requestRow: {
+      flexDirection: 'row',
+      padding: 12,
+      borderRadius: 12,
+      backgroundColor: colors.surface,
+      marginBottom: 10,
+      alignItems: 'center',
+    },
+    requestMeta: { color: colors.textMuted, fontSize: 12, marginTop: 2 },
+    requestActions: { flexDirection: 'row', gap: 8 },
+    requestBtn: { paddingVertical: 8, paddingHorizontal: 14, borderRadius: 8 },
+    requestBtnDecline: { backgroundColor: colors.borderLight },
+    requestBtnDeclineText: { color: colors.textMuted, fontWeight: '600', fontSize: 13 },
+    requestBtnAccept: { backgroundColor: colors.primary },
+    requestBtnAcceptText: { color: '#fff', fontWeight: '600', fontSize: 13 },
+    statusBadge: { fontSize: 11, fontWeight: '700', paddingVertical: 4, paddingHorizontal: 10, borderRadius: 20, overflow: 'hidden' },
+    statusBadge_pending: { backgroundColor: colors.primaryTint, color: colors.primary },
+    statusBadge_accepted: { backgroundColor: colors.successTint, color: colors.success },
+    statusBadge_declined: { backgroundColor: colors.dangerTint, color: colors.danger },
+    statusBadge_expired: { backgroundColor: colors.borderLight, color: colors.textFaint },
     detailBackdrop: {
       flex: 1,
       backgroundColor: colors.overlay,

@@ -3,6 +3,7 @@ import { AppState } from 'react-native';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { clearAllCaches } from '../lib/offlineCache';
+import { clearAllQueues } from '../lib/offlineQueue';
 import type { Profile } from '../types/database';
 
 type AuthState = {
@@ -87,6 +88,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // never see this account's cached Home/Schedule/Contacts/Announcements
     // data, not even momentarily before a fresh fetch lands.
     await clearAllCaches();
+    await clearAllQueues();
   }
 
   async function deleteAccount(): Promise<{ error: string | null }> {
@@ -102,6 +104,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // instead of waiting for it to fail naturally on the next API call.
     await supabase.auth.signOut();
     await clearAllCaches();
+    await clearAllQueues();
     return { error: null };
   }
 

@@ -7,7 +7,11 @@ type RetryOptions = {
 
 // Retry only on network/transport failures — never on RLS denials, duplicate
 // key conflicts, or validation errors, which retrying would just repeat.
-function isTransient(error: { message?: string } | null): boolean {
+// Exported for src/components/OutboxFlusher.tsx, which needs the same
+// distinction: a queued request that gets a real (non-transient) answer
+// from the server, success or failure, is done; one that never reached the
+// server at all should stay queued for the next attempt.
+export function isTransient(error: { message?: string } | null): boolean {
   const message = error?.message ?? '';
   return /network|fetch|timeout|timed out|ECONNRESET|ETIMEDOUT/i.test(message);
 }

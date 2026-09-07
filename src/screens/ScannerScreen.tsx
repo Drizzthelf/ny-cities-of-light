@@ -13,6 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
 import { withRetry } from '../lib/withRetry';
+import { enqueueRequest, isQueued } from '../lib/offlineQueue';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { Avatar } from '../components/Avatar';
@@ -22,14 +23,52 @@ import { type ColorScheme } from '../theme';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-// Matches the server-side expiry in
-// supabase/migrations/20260823000000_connection_requests.sql.
-const REQUEST_TIMEOUT_MS = 2 * 60 * 1000;
+// How long to keep the live "waiting for them to accept" spinner up before
+// giving up on an instant answer and switching to the calm "sent — they'll
+// see it in their Requests tab" message. This is no longer a server TTL —
+// requests now stay acceptable for a day either way (see
+// supabase/migrations/20260906000000_async_connection_requests.sql) — just
+// a local UX choice not to make someone stand there watching a spinner once
+// it's clear the other person isn't tapping Accept right this second.
+const LIVE_WAIT_MS = 15 * 1000;
 
-type RequestState = 'idle' | 'sending' | 'waiting' | 'accepted' | 'declined' | 'expired';
+// How long to wait for request_connection to actually respond before
+// treating the device as offline/unreachable and queueing the request for
+// later instead (see src/lib/offlineQueue.ts, src/components/OutboxFlusher.tsx).
+const SEND_TIMEOUT_MS = 10 * 1000;
+
+type RequestState =
+  | 'idle'
+  | 'sending'
+  | 'waiting'
+  | 'accepted'
+  | 'declined'
+  | 'expired'
+  // Gave up waiting live for an instant accept — the request itself is
+  // still genuinely pending server-side, just no longer being watched here.
+  | 'sentAsync'
+  // Couldn't reach the server within SEND_TIMEOUT_MS — queued locally,
+  // will be sent by OutboxFlusher once the device is back online.
+  | 'queued';
 
 function formatTime(iso: string) {
   return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+// Tries the new {id, n} JSON payload first (see HomeScreen.tsx's QRCode),
+// falling back to treating the whole scanned string as a bare UUID — the
+// shape shown by an app version from before this change, or if JSON.parse
+// fails for any other reason. Never throws.
+function parseQrPayload(raw: string): { id: string; name?: string } | null {
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed.id === 'string' && UUID_RE.test(parsed.id)) {
+      return { id: parsed.id, name: typeof parsed.n === 'string' ? parsed.n : undefined };
+    }
+  } catch {
+    // Not JSON — fall through to the bare-UUID check below.
+  }
+  return UUID_RE.test(raw) ? { id: raw } : null;
 }
 
 // "Different day" resets at midnight Eastern specifically (the conference's
@@ -83,6 +122,10 @@ export function ScannerScreen() {
   // of truth and re-checks both at request time and at accept time.
   const [priorScanCount, setPriorScanCount] = useState(0);
   const [scannedTodayAlready, setScannedTodayAlready] = useState(false);
+  // True only once the best-effort profile fetch below has come back and
+  // confirmed there's really no such profile (not just "hasn't answered
+  // yet" or "failed/offline") — see handleBarCode.
+  const [profileMissing, setProfileMissing] = useState(false);
   const [scannedEvent, setScannedEvent] = useState<Event | null>(null);
   const [alreadyCheckedIn, setAlreadyCheckedIn] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -92,6 +135,12 @@ export function ScannerScreen() {
   const [pendingRequestId, setPendingRequestId] = useState<string | null>(null);
   const [doublePointsActive, setDoublePointsActive] = useState(false);
   const lockRef = useRef(false);
+  // Prevents two overlapping send attempts to the same person — e.g.
+  // scanning them again while the first attempt is still racing against
+  // SEND_TIMEOUT_MS and hasn't been queued yet (the persisted outbox check
+  // in handleSendRequest only catches an attempt that already finished
+  // queueing, not one still in flight).
+  const inFlightRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     if (permission && !permission.granted && permission.canAskAgain) {
@@ -119,12 +168,12 @@ export function ScannerScreen() {
       )
       .subscribe();
 
-    // Local mirror of the server's TTL, in case the realtime UPDATE never
-    // arrives — the server is still the source of truth for whether the
-    // request can actually still be accepted.
+    // Not a server timeout anymore (see LIVE_WAIT_MS above) — just stop
+    // showing a live spinner once it's clear this isn't an instant accept.
+    // The request itself stays valid server-side regardless.
     const timeout = setTimeout(() => {
-      setRequestState((s) => (s === 'waiting' ? 'expired' : s));
-    }, REQUEST_TIMEOUT_MS);
+      setRequestState((s) => (s === 'waiting' ? 'sentAsync' : s));
+    }, LIVE_WAIT_MS);
 
     return () => {
       supabase.removeChannel(channel);
@@ -134,10 +183,10 @@ export function ScannerScreen() {
 
   async function handleBarCode({ data }: { data: string }) {
     if (lockRef.current) return;
-    const code = data.trim();
+    const raw = data.trim();
 
-    if (code.startsWith('event:')) {
-      const eventId = code.slice(6);
+    if (raw.startsWith('event:')) {
+      const eventId = raw.slice(6);
       if (!UUID_RE.test(eventId)) return;
       lockRef.current = true;
       setLoading(true);
@@ -170,7 +219,10 @@ export function ScannerScreen() {
       return;
     }
 
-    if (!UUID_RE.test(code)) return;
+    const parsed = parseQrPayload(raw);
+    if (!parsed) return;
+    const { id: code, name: qrName } = parsed;
+
     if (!session?.user || code === session.user.id) {
       lockRef.current = true;
       Alert.alert("That's you", "You can't scan your own code.", [
@@ -179,62 +231,105 @@ export function ScannerScreen() {
       return;
     }
     lockRef.current = true;
-    setLoading(true);
-    try {
-      const { data: profile, error } = await withRetry(() =>
-        supabase.from('profiles').select('*, profile_socials(*)').eq('id', code).maybeSingle()
-      );
-      if (error) throw error;
-      if (!profile) {
-        Alert.alert('Not found', 'No profile for that code.', [
-          { text: 'OK', onPress: () => (lockRef.current = false) },
-        ]);
-        return;
+
+    // Opens immediately from what the QR itself told us — zero network
+    // calls, so this works even fully offline. Photo, socials, and the
+    // scan-history/double-points hints below fill in afterward,
+    // independently and best-effort; none of them gate reaching "Send
+    // request", since request_connection re-validates everything
+    // (including the max-3/once-per-day rules) server-side regardless of
+    // what these hints say.
+    setProfileMissing(false);
+    setPriorScanCount(0);
+    setScannedTodayAlready(false);
+    setDoublePointsActive(false);
+    setRequestState('idle');
+    setPendingRequestId(null);
+    setScannedProfile({
+      id: code,
+      first_name: qrName ?? 'this person',
+      photo_url: null,
+      is_admin: false,
+      created_at: '',
+      profile_socials: [],
+    });
+
+    withRetry(() => supabase.from('profiles').select('*, profile_socials(*)').eq('id', code).maybeSingle()).then(
+      ({ data: profile, error }) => {
+        if (profile) setScannedProfile(profile as Profile);
+        // Only treat it as genuinely missing once we have a confirmed,
+        // error-free "no such row" answer — a failed/offline attempt says
+        // nothing about whether the profile actually exists.
+        else if (!error) setProfileMissing(true);
       }
-      const { data: existingScans } = await supabase
-        .from('scans')
-        .select('scan_date')
-        .eq('scanner_id', session.user.id)
-        .eq('scanned_id', code);
-      // Best-effort hint, checked fresh per scan — the server (request_connection /
-      // record_mutual_scan) is the actual source of truth for what's allowed and
-      // what gets awarded, which can be up to ~2 minutes after this check.
-      const nowIso = new Date().toISOString();
-      const { data: doubleWindow } = await supabase
+    );
+
+    withRetry(() =>
+      supabase.from('scans').select('scan_date').eq('scanner_id', session.user!.id).eq('scanned_id', code)
+    ).then(({ data: existingScans }) => {
+      if (!existingScans) return;
+      const todayEt = easternDateString();
+      setPriorScanCount(existingScans.length);
+      setScannedTodayAlready(existingScans.some((s) => s.scan_date === todayEt));
+    });
+
+    // Best-effort hint, checked fresh per scan — the server
+    // (request_connection / record_mutual_scan) is the actual source of
+    // truth for what's allowed and what gets awarded.
+    const nowIso = new Date().toISOString();
+    withRetry(() =>
+      supabase
         .from('double_points_windows')
         .select('id')
         .lte('start_time', nowIso)
         .gte('end_time', nowIso)
         .limit(1)
-        .maybeSingle();
-      const todayEt = easternDateString();
+        .maybeSingle()
+    ).then(({ data: doubleWindow }) => {
       setDoublePointsActive(!!doubleWindow);
-      setPriorScanCount(existingScans?.length ?? 0);
-      setScannedTodayAlready((existingScans ?? []).some((s) => s.scan_date === todayEt));
-      setRequestState('idle');
-      setPendingRequestId(null);
-      setScannedProfile(profile as Profile);
-    } catch (err: any) {
-      Alert.alert('Error', err.message ?? String(err), [
-        { text: 'OK', onPress: () => (lockRef.current = false) },
-      ]);
-    } finally {
-      setLoading(false);
-    }
+    });
   }
 
   async function handleSendRequest() {
     if (!scannedProfile || !session?.user) return;
+    const targetId = scannedProfile.id;
+    const targetName = scannedProfile.first_name;
+
+    // Already sitting in the outbox from an earlier scan of the same
+    // person this session (e.g. scanned twice while offline) — don't fire
+    // a second attempt or create a second queue entry.
+    if (await isQueued(session.user.id, targetId)) {
+      setRequestState('queued');
+      return;
+    }
+    if (inFlightRef.current.has(targetId)) return;
+    inFlightRef.current.add(targetId);
+
     setRequestState('sending');
     // Sends a live request rather than instantly crediting both people —
-    // see supabase/migrations/20260823000000_connection_requests.sql. The
-    // other person must accept while they're actively in the app right
-    // now (no push notifications, by design — this requires both people
-    // to genuinely be together in the moment, and defeats printed-poster
-    // farming since nobody's there to keep a request alive).
-    const { data, error } = await withRetry(() =>
-      supabase.rpc('request_connection', { p_target_id: scannedProfile.id })
-    );
+    // see supabase/migrations/20260823000000_connection_requests.sql —
+    // and now stays acceptable for a day rather than requiring an instant
+    // live accept (see supabase/migrations/20260906000000_async_connection_requests.sql
+    // and the Requests tab on ContactsScreen.tsx). If the server doesn't
+    // answer within SEND_TIMEOUT_MS, assume the device is offline and
+    // queue it locally instead of leaving the user staring at a spinner —
+    // see src/lib/offlineQueue.ts / OutboxFlusher.tsx.
+    const attempt = withRetry(() => supabase.rpc('request_connection', { p_target_id: targetId }));
+    const timedOut = new Promise<'timeout'>((resolve) => setTimeout(() => resolve('timeout'), SEND_TIMEOUT_MS));
+    const result = await Promise.race([attempt, timedOut]);
+    inFlightRef.current.delete(targetId);
+
+    if (result === 'timeout') {
+      // The original call isn't cancelled — if it does land late and
+      // actually succeeds, the queued retry below just hits
+      // request_connection's own "already have a pending request" check
+      // and no-ops there (see OutboxFlusher.tsx), so no duplicate is created.
+      await enqueueRequest(session.user.id, targetId, targetName);
+      setRequestState('queued');
+      return;
+    }
+
+    const { data, error } = result;
     if (error) {
       setRequestState('idle');
       Alert.alert('Could not send request', error.message);
@@ -265,6 +360,7 @@ export function ScannerScreen() {
     setScannedProfile(null);
     setPriorScanCount(0);
     setScannedTodayAlready(false);
+    setProfileMissing(false);
     setScannedEvent(null);
     setAlreadyCheckedIn(false);
     setRequestState('idle');
@@ -346,7 +442,10 @@ export function ScannerScreen() {
                     {scannedProfile.profile_socials.map((s) => s.handle).join(' · ')}
                   </Text>
                 ) : null}
-                {!scanBlocked && (
+                {profileMissing && (
+                  <Text style={styles.alreadyText}>This code doesn't match a real profile.</Text>
+                )}
+                {!scanBlocked && !profileMissing && (
                   <Text style={styles.pointsHint}>
                     {priorScanCount === 0 && doublePointsActive && todayEt > PRICING_CUTOFF
                       ? '🔥 +20 pts for both of you (2x active!)'
@@ -367,8 +466,7 @@ export function ScannerScreen() {
                   <View style={styles.waitingBox}>
                     <ActivityIndicator size="small" color={colors.primary} />
                     <Text style={styles.waitingText}>
-                      Waiting for {scannedProfile.first_name} to accept — they need to have the
-                      app open right now.
+                      Waiting to see if {scannedProfile.first_name} accepts right now...
                     </Text>
                   </View>
                 )}
@@ -381,8 +479,20 @@ export function ScannerScreen() {
                 {requestState === 'expired' && (
                   <Text style={styles.alreadyText}>Request expired — ask them to scan again.</Text>
                 )}
+                {requestState === 'sentAsync' && (
+                  <Text style={styles.asyncText}>
+                    Request sent — {scannedProfile.first_name} will see it in their Requests tab, and
+                    you'll get a notification if they respond.
+                  </Text>
+                )}
+                {requestState === 'queued' && (
+                  <Text style={styles.alreadyText}>
+                    You're offline — this will send once you're back online. {scannedProfile.first_name}{' '}
+                    will see it in their Requests tab.
+                  </Text>
+                )}
 
-                {!scanBlocked && (requestState === 'idle' || requestState === 'sending') && (
+                {!scanBlocked && !profileMissing && (requestState === 'idle' || requestState === 'sending') && (
                   <TouchableOpacity
                     style={[styles.button, requestState === 'sending' && styles.buttonDisabled]}
                     onPress={handleSendRequest}
@@ -538,6 +648,7 @@ function getStyles(colors: ColorScheme) {
     pointsHint: { color: colors.primary, fontWeight: '600', fontSize: 13, marginTop: 10 },
     alreadyText: { color: colors.highlightText, marginTop: 8, fontSize: 13 },
     successText: { color: colors.success, fontWeight: '700', marginTop: 8, fontSize: 14 },
+    asyncText: { color: colors.primary, fontWeight: '600', marginTop: 8, fontSize: 13, textAlign: 'center' },
     waitingBox: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10, paddingHorizontal: 8 },
     waitingText: { flex: 1, color: colors.primary, fontSize: 12, lineHeight: 16 },
     eventBadge: {

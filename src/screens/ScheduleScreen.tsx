@@ -49,6 +49,11 @@ export function ScheduleScreen() {
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
   const [cacheSavedAt, setCacheSavedAt] = useState<number | null>(null);
   const freshRef = useRef(false);
+  // Timestamp of the last data we actually know is good — from either a
+  // successful live load or the on-mount cache read. Lets a *failed*
+  // pull-to-refresh show "showing saved data from Xm ago" instead of
+  // silently doing nothing and looking like the refresh worked.
+  const lastGoodAtRef = useRef<number | null>(null);
 
   const load = useCallback(async () => {
     const { data, error } = await supabase
@@ -56,8 +61,12 @@ export function ScheduleScreen() {
       .select('*')
       .order('start_time', { ascending: true });
     // On failure, leave whatever's already on screen (fresh or cached)
-    // instead of clearing the list out to empty.
-    if (error || !data) return;
+    // instead of clearing the list out to empty — but still surface that
+    // it didn't refresh, via the last-known-good timestamp.
+    if (error || !data) {
+      setCacheSavedAt(lastGoodAtRef.current);
+      return;
+    }
 
     const grouped: Record<string, Event[]> = {};
     for (const event of data as Event[]) {
@@ -67,6 +76,7 @@ export function ScheduleScreen() {
     }
     const groupedSections = Object.entries(grouped).map(([title, data]) => ({ title, data }));
     freshRef.current = true;
+    lastGoodAtRef.current = Date.now();
     setCacheSavedAt(null);
     setSections(groupedSections);
     writeCache<Section[]>('schedule-events', CACHE_USER, groupedSections);
@@ -81,6 +91,7 @@ export function ScheduleScreen() {
       if (cancelled || !cached || freshRef.current) return;
       setSections(cached.data);
       setCacheSavedAt(cached.savedAt);
+      lastGoodAtRef.current = cached.savedAt;
     });
     return () => { cancelled = true; };
   }, []);
