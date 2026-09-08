@@ -18,6 +18,7 @@ import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { Avatar } from '../components/Avatar';
 import { ReportModal } from '../components/ReportModal';
+import { OfflineBanner } from '../components/OfflineBanner';
 import type { Event, Profile } from '../types/database';
 import { type ColorScheme } from '../theme';
 
@@ -415,11 +416,14 @@ export function ScannerScreen() {
           CameraView's native preview surface can otherwise sit above and
           swallow taps meant for sibling native UI like a stack header. */}
       <SafeAreaView style={styles.topBar} edges={['top']}>
-        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-          <Text style={styles.backButtonText}>‹ Back</Text>
-        </TouchableOpacity>
-        <Text style={styles.topBarTitle}>Scan QR</Text>
-        <View style={styles.backButton} />
+        <View style={styles.topBarRow}>
+          <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+            <Text style={styles.backButtonText}>‹ Back</Text>
+          </TouchableOpacity>
+          <Text style={styles.topBarTitle}>Scan QR</Text>
+          <View style={styles.backButton} />
+        </View>
+        <OfflineBanner />
       </SafeAreaView>
       <View style={styles.overlay}>
         <View style={styles.reticle} />
@@ -606,6 +610,8 @@ function getStyles(colors: ColorScheme) {
       top: 0,
       left: 0,
       right: 0,
+    },
+    topBarRow: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',

@@ -7,6 +7,7 @@ import { useTheme } from '../context/ThemeContext';
 import { EventRow } from '../components/EventRow';
 import { EventDetailModal } from '../components/EventDetailModal';
 import { CachedDataBanner } from '../components/CachedDataBanner';
+import { OfflineBanner } from '../components/OfflineBanner';
 import { readCache, writeCache } from '../lib/offlineCache';
 import type { Event } from '../types/database';
 import { fonts, type ColorScheme } from '../theme';
@@ -136,6 +137,7 @@ export function ScheduleScreen() {
               </Text>
               <Text style={styles.headerCitation}>— Ecclesiastes 3:1</Text>
             </View>
+            <OfflineBanner />
             <CachedDataBanner savedAt={cacheSavedAt} style={styles.cacheBanner} />
             <TouchableOpacity style={styles.venuesButton} onPress={() => navigation.navigate('Venues')}>
               <Text style={styles.venuesButtonText}>View all venues</Text>

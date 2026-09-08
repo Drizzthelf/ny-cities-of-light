@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
+import { OfflineBanner } from '../components/OfflineBanner';
 import { fonts, type ColorScheme } from '../theme';
 
 export function SettingsScreen() {
@@ -50,6 +51,7 @@ export function SettingsScreen() {
       <View style={[styles.header, { paddingTop: top + 10 }]}>
         <Text style={styles.headerTitle}>Settings</Text>
       </View>
+      <OfflineBanner />
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.body}>
         <TouchableOpacity

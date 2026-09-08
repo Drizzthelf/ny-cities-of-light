@@ -24,6 +24,7 @@ import { useTheme } from '../context/ThemeContext';
 import { Avatar } from '../components/Avatar';
 import { EventRow } from '../components/EventRow';
 import { EventDetailModal } from '../components/EventDetailModal';
+import { OfflineBanner } from '../components/OfflineBanner';
 import type { Announcement, DoublePointsWindow, Event, Profile, RafflePrize, Report } from '../types/database';
 import { fonts, type ColorScheme } from '../theme';
 
@@ -74,6 +75,7 @@ export function AdminScreen() {
         <Text style={styles.headerQuote}>"Choose to be a peacemaker, now and always."</Text>
         <Text style={styles.headerCitation}>— President Russell M. Nelson</Text>
       </View>
+      <OfflineBanner />
       <View style={styles.tabBar}>
         {(Object.keys(TAB_LABELS) as Section[]).map((s) => (
           <TouchableOpacity
