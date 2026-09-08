@@ -50,7 +50,7 @@ export function ProfileScreen({ onViewContacts }: Props) {
   return (
     <ImageBackground source={SKYLINE} style={styles.bg} resizeMode="cover">
       <SafeAreaView style={styles.safeArea} edges={['top', 'bottom', 'left', 'right']}>
-        <ScrollView contentContainerStyle={styles.container}>
+        <ScrollView style={styles.scroll} contentContainerStyle={styles.container}>
           <Text style={styles.logoHeadline}>{'Anchored\nin ✶ Christ'}</Text>
           <Text style={styles.logoSub}>– Cities of Light –</Text>
 
@@ -108,6 +108,13 @@ function getStyles(colors: ColorScheme) {
   return StyleSheet.create({
     bg: { flex: 1 },
     safeArea: { flex: 1 },
+    // Without this, the ScrollView's own frame isn't bounded to fill its
+    // parent — it was only given a contentContainerStyle, not a style —
+    // so on a viewport proportioned differently than a typical iPhone it
+    // doesn't actually clip/scroll, and bottom content (the My Contacts
+    // button, on an iPad) stays unreachable. This was the real remaining
+    // half of the Guideline 4 fix.
+    scroll: { flex: 1 },
     // flexGrow, not flex — this is a ScrollView's contentContainerStyle now
     // (Apple review Guideline 4 fix: this screen had no way to scroll if
     // its content ever overflowed the viewport, e.g. on an iPad running it

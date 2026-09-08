@@ -51,7 +51,7 @@ export function SettingsScreen() {
         <Text style={styles.headerTitle}>Settings</Text>
       </View>
 
-      <ScrollView contentContainerStyle={styles.body}>
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.body}>
         <TouchableOpacity
           style={styles.row}
           // EditProfile lives inside the Profile tab's own stack, not
@@ -97,6 +97,12 @@ function getStyles(colors: ColorScheme) {
       paddingBottom: 14,
     },
     headerTitle: { fontSize: 30, fontFamily: fonts.title, color: colors.textOnDark },
+    // Without this, the ScrollView's own frame isn't bounded to fill its
+    // parent — it was only given a contentContainerStyle, not a style —
+    // so on a viewport proportioned differently than a typical iPhone it
+    // doesn't actually clip/scroll. This was the real remaining half of
+    // the Guideline 4 fix.
+    scroll: { flex: 1 },
     // flexGrow, not a plain object with no flex — this is now a
     // ScrollView's contentContainerStyle (Apple review Guideline 4 fix:
     // avoid the same "no way to scroll if content overflows" gap flagged

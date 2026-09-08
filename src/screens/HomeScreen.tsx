@@ -172,7 +172,7 @@ export function HomeScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <ScrollView contentContainerStyle={styles.container}>
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.container}>
       <Text style={styles.greeting}>Hi, {profile.first_name}</Text>
 
       <CachedDataBanner savedAt={cacheSavedAt} style={styles.cacheBanner} />
@@ -239,6 +239,13 @@ export function HomeScreen() {
 function getStyles(colors: ColorScheme) {
   return StyleSheet.create({
     safeArea: { flex: 1, backgroundColor: colors.background },
+    // Without this, the ScrollView's own frame isn't bounded to fill its
+    // parent — it was only given a contentContainerStyle, not a style —
+    // so on a viewport proportioned differently than a typical iPhone
+    // (e.g. an iPad running this in compatibility mode) it doesn't
+    // actually clip/scroll, and bottom content stays unreachable. This was
+    // the real remaining half of the Guideline 4 fix.
+    scroll: { flex: 1 },
     // flexGrow, not flex — this is a ScrollView's contentContainerStyle now
     // (see Apple review Guideline 4 fix: this screen had no way to scroll,
     // so on a viewport shorter/differently-proportioned than a typical
