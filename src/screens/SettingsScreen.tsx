@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Alert, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
@@ -51,7 +51,7 @@ export function SettingsScreen() {
         <Text style={styles.headerTitle}>Settings</Text>
       </View>
 
-      <View style={styles.body}>
+      <ScrollView contentContainerStyle={styles.body}>
         <TouchableOpacity
           style={styles.row}
           // EditProfile lives inside the Profile tab's own stack, not
@@ -83,7 +83,7 @@ export function SettingsScreen() {
         <TouchableOpacity style={styles.row} onPress={() => navigation.navigate('PrivacyPolicy')}>
           <Text style={styles.rowText}>Privacy policy</Text>
         </TouchableOpacity>
-      </View>
+      </ScrollView>
     </View>
   );
 }
@@ -97,7 +97,11 @@ function getStyles(colors: ColorScheme) {
       paddingBottom: 14,
     },
     headerTitle: { fontSize: 30, fontFamily: fonts.title, color: colors.textOnDark },
-    body: { padding: 24, gap: 12 },
+    // flexGrow, not a plain object with no flex — this is now a
+    // ScrollView's contentContainerStyle (Apple review Guideline 4 fix:
+    // avoid the same "no way to scroll if content overflows" gap flagged
+    // on the QR Meetup/Home screen).
+    body: { flexGrow: 1, padding: 24, paddingBottom: 40, gap: 12 },
     row: {
       flexDirection: 'row',
       justifyContent: 'space-between',

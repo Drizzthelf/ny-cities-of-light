@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -170,7 +171,8 @@ export function HomeScreen() {
   if (!profile) return <ActivityIndicator style={{ flex: 1 }} />;
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.safeArea}>
+      <ScrollView contentContainerStyle={styles.container}>
       <Text style={styles.greeting}>Hi, {profile.first_name}</Text>
 
       <CachedDataBanner savedAt={cacheSavedAt} style={styles.cacheBanner} />
@@ -229,13 +231,22 @@ export function HomeScreen() {
         <Text style={styles.leaderboardButtonText}>🎟️ Raffle</Text>
         <Text style={styles.leaderboardArrow}>›</Text>
       </TouchableOpacity>
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
 function getStyles(colors: ColorScheme) {
   return StyleSheet.create({
-    container: { flex: 1, alignItems: 'center', padding: 24, backgroundColor: colors.background },
+    safeArea: { flex: 1, backgroundColor: colors.background },
+    // flexGrow, not flex — this is a ScrollView's contentContainerStyle now
+    // (see Apple review Guideline 4 fix: this screen had no way to scroll,
+    // so on a viewport shorter/differently-proportioned than a typical
+    // iPhone — e.g. an iPad running it in compatibility mode — the bottom
+    // content, the Raffle button, was unreachable). flexGrow lets content
+    // still center/fill on a normal-height screen while remaining free to
+    // grow taller than the viewport and scroll when it doesn't fit.
+    container: { flexGrow: 1, alignItems: 'center', padding: 24, paddingBottom: 40, backgroundColor: colors.background },
     greeting: { fontSize: 26, fontFamily: fonts.title, color: colors.text, marginTop: 8, marginBottom: 20 },
     qrBox: {
       padding: 18,

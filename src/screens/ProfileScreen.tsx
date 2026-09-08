@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { ActivityIndicator, Image, ImageBackground, Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Image, ImageBackground, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -50,7 +50,7 @@ export function ProfileScreen({ onViewContacts }: Props) {
   return (
     <ImageBackground source={SKYLINE} style={styles.bg} resizeMode="cover">
       <SafeAreaView style={styles.safeArea} edges={['top', 'bottom', 'left', 'right']}>
-        <View style={styles.container}>
+        <ScrollView contentContainerStyle={styles.container}>
           <Text style={styles.logoHeadline}>{'Anchored\nin ✶ Christ'}</Text>
           <Text style={styles.logoSub}>– Cities of Light –</Text>
 
@@ -92,7 +92,7 @@ export function ProfileScreen({ onViewContacts }: Props) {
               <Text style={styles.contactsButtonText}>My Contacts</Text>
             </TouchableOpacity>
           </View>
-        </View>
+        </ScrollView>
 
         <Modal visible={photoEnlarged} transparent animationType="fade" onRequestClose={() => setPhotoEnlarged(false)}>
           <TouchableOpacity style={styles.enlargeBackdrop} activeOpacity={1} onPress={() => setPhotoEnlarged(false)}>
@@ -108,7 +108,13 @@ function getStyles(colors: ColorScheme) {
   return StyleSheet.create({
     bg: { flex: 1 },
     safeArea: { flex: 1 },
-    container: { flex: 1, alignItems: 'center', paddingHorizontal: 24, paddingBottom: 24, paddingTop: 8 },
+    // flexGrow, not flex — this is a ScrollView's contentContainerStyle now
+    // (Apple review Guideline 4 fix: this screen had no way to scroll if
+    // its content ever overflowed the viewport, e.g. on an iPad running it
+    // in compatibility mode — same gap flagged and fixed on the QR
+    // Meetup/Home screen). flexGrow keeps content centered/filling on a
+    // normal-height screen while still allowing it to grow and scroll.
+    container: { flexGrow: 1, alignItems: 'center', paddingHorizontal: 24, paddingBottom: 24, paddingTop: 8 },
     // Matches "Cities of Light Font Example.png": a big bold-condensed
     // headline ("ANCHORED IN CHRIST") with a smaller letter-spaced subhead
     // ("CITIES OF LIGHT") beneath it — the poster's actual hierarchy, now
