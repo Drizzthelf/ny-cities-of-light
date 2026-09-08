@@ -11,6 +11,7 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
@@ -19,6 +20,7 @@ import { CachedDataBanner } from '../components/CachedDataBanner';
 import { ReportModal } from '../components/ReportModal';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { readCache, writeCache } from '../lib/offlineCache';
+import { listQueue, type QueuedRequest } from '../lib/offlineQueue';
 import type { ConnectionRequest, Profile, SocialPlatform } from '../types/database';
 import { type ColorScheme } from '../theme';
 
@@ -70,6 +72,15 @@ export function ContactsScreen() {
   const [requestsCacheSavedAt, setRequestsCacheSavedAt] = useState<number | null>(null);
   const requestsFreshRef = useRef(false);
   const requestsLastGoodAtRef = useRef<number | null>(null);
+  // Requests still sitting in the local offline outbox (see
+  // src/lib/offlineQueue.ts) — a scan made with no connection never gets a
+  // real connection_requests row until OutboxFlusher sends it later, so
+  // without this a request made entirely offline was invisible here until
+  // reconnecting. Read fresh on every focus (a plain AsyncStorage read, not
+  // a network call, so this is cheap regardless of connectivity) rather
+  // than only on mount, so scanning on the Scanner tab and then switching
+  // here shows it immediately.
+  const [queuedRequests, setQueuedRequests] = useState<QueuedRequest[]>([]);
 
   const load = useCallback(async () => {
     if (!session?.user) return;
@@ -190,6 +201,13 @@ export function ContactsScreen() {
     loadRequests();
   }, [loadRequests]);
 
+  const loadQueuedRequests = useCallback(async () => {
+    if (!session?.user) return;
+    setQueuedRequests(await listQueue(session.user.id));
+  }, [session?.user]);
+
+  useFocusEffect(useCallback(() => { loadQueuedRequests(); }, [loadQueuedRequests]));
+
   // Live-updates the Received list the moment a new request arrives, or an
   // existing one resolves some other way (e.g. it expired via the
   // pg_cron sweep) — without this, a request sent while this tab is open
@@ -236,7 +254,7 @@ export function ContactsScreen() {
 
   async function onRefresh() {
     setRefreshing(true);
-    if (viewMode === 'requests') await loadRequests();
+    if (viewMode === 'requests') await Promise.all([loadRequests(), loadQueuedRequests()]);
     else await load();
     setRefreshing(false);
   }
@@ -280,6 +298,14 @@ export function ContactsScreen() {
   }
 
   const favoritesCount = rows.filter((r) => favoriteIds.has(r.id)).length;
+  // Excludes anything that already has a real sentRequests row — closes a
+  // brief window where a queued item's request_connection call has
+  // already landed server-side but OutboxFlusher hasn't cleared the local
+  // queue entry yet, which would otherwise show the same person twice
+  // (once "Queued", once "Pending") for a moment.
+  const activeQueuedRequests = queuedRequests.filter(
+    (q) => !sentRequests.some((s) => s.target.id === q.targetId)
+  );
 
   const modeRows = viewMode === 'favorites' ? rows.filter((r) => favoriteIds.has(r.id)) : rows;
   const query = search.trim().toLowerCase();
@@ -379,21 +405,38 @@ export function ContactsScreen() {
           ListFooterComponent={
             <>
               <Text style={styles.requestsSectionTitle}>Sent by you</Text>
-              {sentRequests.length === 0 ? (
+              {activeQueuedRequests.length === 0 && sentRequests.length === 0 ? (
                 <Text style={styles.emptyText}>You haven't sent any connection requests yet.</Text>
               ) : (
-                sentRequests.map((item) => (
-                  <View key={item.id} style={styles.requestRow}>
-                    <Avatar photoUrl={item.target.photo_url} name={item.target.first_name} size={48} />
-                    <View style={styles.rowText}>
-                      <Text style={styles.name}>{item.target.first_name}</Text>
-                      <Text style={styles.requestMeta}>
-                        Sent {new Date(item.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' })}
-                      </Text>
+                <>
+                  {/* Not yet a real request server-side — still sitting in
+                      the local outbox because the device was offline when
+                      it was scanned. Shown first, ahead of confirmed-sent
+                      ones, since it's the most likely thing someone's
+                      checking on right after a scan. */}
+                  {activeQueuedRequests.map((item) => (
+                    <View key={`queued-${item.targetId}`} style={styles.requestRow}>
+                      <Avatar photoUrl={null} name={item.targetName} size={48} />
+                      <View style={styles.rowText}>
+                        <Text style={styles.name}>{item.targetName}</Text>
+                        <Text style={styles.requestMeta}>Waiting to send — you're offline</Text>
+                      </View>
+                      <Text style={[styles.statusBadge, styles.statusBadgeQueued]}>Queued</Text>
                     </View>
-                    <Text style={styles.statusBadge}>Pending</Text>
-                  </View>
-                ))
+                  ))}
+                  {sentRequests.map((item) => (
+                    <View key={item.id} style={styles.requestRow}>
+                      <Avatar photoUrl={item.target.photo_url} name={item.target.first_name} size={48} />
+                      <View style={styles.rowText}>
+                        <Text style={styles.name}>{item.target.first_name}</Text>
+                        <Text style={styles.requestMeta}>
+                          Sent {new Date(item.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+                        </Text>
+                      </View>
+                      <Text style={styles.statusBadge}>Pending</Text>
+                    </View>
+                  ))}
+                </>
               )}
             </>
           }
@@ -582,6 +625,10 @@ function getStyles(colors: ColorScheme) {
       backgroundColor: colors.primaryTint,
       color: colors.primary,
     },
+    // Amber "offline" tint — same convention as OfflineBanner/
+    // CachedDataBanner elsewhere, not colors.danger — this isn't an error,
+    // just not-sent-yet.
+    statusBadgeQueued: { backgroundColor: colors.highlightTint, color: colors.highlightText },
     detailBackdrop: {
       flex: 1,
       backgroundColor: colors.overlay,
