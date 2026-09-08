@@ -2,7 +2,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { AppState } from 'react-native';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
-import { clearAllCaches } from '../lib/offlineCache';
+import { clearAllCaches, readCache, writeCache } from '../lib/offlineCache';
 import { clearAllQueues } from '../lib/offlineQueue';
 import type { Profile } from '../types/database';
 
@@ -31,12 +31,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [pendingRegistrationCode, setPendingRegistrationCode] = useState<string | null>(null);
 
   async function loadProfile(userId: string) {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('profiles')
       .select('*, profile_socials(*)')
       .eq('id', userId)
       .maybeSingle();
+    if (error) {
+      // A network/server failure looks identical to "no row found" here
+      // (both come back as data: null) — without this branch, losing
+      // connectivity bounced a fully set-up user straight to the
+      // create-profile screen, since RootNavigator treats profile === null
+      // as "never finished onboarding." Fall back to the last known-good
+      // profile instead; only an actual successful "no such row" result
+      // (below) should ever be treated as a genuinely new account.
+      const cached = await readCache<Profile>('profile', userId);
+      if (cached) setProfile(cached.data);
+      return;
+    }
     setProfile((data as Profile | null) ?? null);
+    if (data) writeCache<Profile>('profile', userId, data as Profile);
   }
 
   useEffect(() => {
