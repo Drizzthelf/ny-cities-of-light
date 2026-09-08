@@ -2,13 +2,14 @@ import React, { useMemo, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
+import * as Updates from 'expo-updates';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { OfflineBanner } from '../components/OfflineBanner';
 import { fonts, type ColorScheme } from '../theme';
 
 export function SettingsScreen() {
-  const { signOut, deleteAccount } = useAuth();
+  const { signOut, deleteAccount, profile } = useAuth();
   const { colors, mode, toggleMode } = useTheme();
   const styles = useMemo(() => getStyles(colors), [colors]);
   const { top } = useSafeAreaInsets();
@@ -85,6 +86,25 @@ export function SettingsScreen() {
         <TouchableOpacity style={styles.row} onPress={() => navigation.navigate('PrivacyPolicy')}>
           <Text style={styles.rowText}>Privacy policy</Text>
         </TouchableOpacity>
+
+        {/* Admin-only — the point is diagnosing "is a given OTA update
+            actually running on this device", not something an attendee
+            needs to see. isEmbeddedLaunch=true means no OTA update has
+            ever been successfully applied; this build's native code is
+            all that's running. */}
+        {profile?.is_admin && (
+          <View style={styles.buildInfoBox}>
+            <Text style={styles.buildInfoTitle}>Build info (admin only)</Text>
+            <Text style={styles.buildInfoLine}>
+              Update: {Updates.isEmbeddedLaunch ? 'embedded (no OTA update applied)' : (Updates.updateId?.slice(0, 8) ?? 'unknown')}
+            </Text>
+            {!!Updates.createdAt && (
+              <Text style={styles.buildInfoLine}>Published: {Updates.createdAt.toLocaleString()}</Text>
+            )}
+            <Text style={styles.buildInfoLine}>Channel: {Updates.channel || 'none'}</Text>
+            <Text style={styles.buildInfoLine}>Runtime version: {Updates.runtimeVersion || 'unknown'}</Text>
+          </View>
+        )}
       </ScrollView>
     </View>
   );
@@ -124,5 +144,24 @@ function getStyles(colors: ColorScheme) {
     rowText: { color: colors.text, fontSize: 15, fontWeight: '600' },
     dangerRow: { borderColor: colors.dangerBorder },
     dangerRowText: { color: colors.danger, fontSize: 15, fontWeight: '600' },
+    buildInfoBox: {
+      alignSelf: 'stretch',
+      marginTop: 8,
+      padding: 14,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.borderLight,
+      gap: 3,
+    },
+    buildInfoTitle: {
+      color: colors.textFaint,
+      fontSize: 11,
+      fontWeight: '700',
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+      marginBottom: 4,
+    },
+    buildInfoLine: { color: colors.textMuted, fontSize: 12 },
   });
 }
