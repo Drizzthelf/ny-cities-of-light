@@ -8,6 +8,7 @@ import {
 import { AuthProvider } from './src/context/AuthContext';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 import { RootNavigator } from './src/navigation/RootNavigator';
+import { UpdateChecker } from './src/components/UpdateChecker';
 import { palettes } from './src/theme';
 
 function AppContent() {
@@ -15,6 +16,7 @@ function AppContent() {
   return (
     <AuthProvider>
       <StatusBar style={mode === 'dark' ? 'light' : 'dark'} backgroundColor={colors.background} />
+      <UpdateChecker />
       <RootNavigator />
     </AuthProvider>
   );

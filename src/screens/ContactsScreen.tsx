@@ -530,7 +530,12 @@ function getStyles(colors: ColorScheme) {
       color: colors.text,
       backgroundColor: colors.surface,
     },
-    list: { padding: 16 },
+    // flexGrow: 1, not just padding — without it the content container only
+    // takes up as much height as the rows themselves need, so with few
+    // contacts the empty space below the last row isn't part of the list's
+    // scrollable/touchable area at all, and pull-to-refresh only works if
+    // your finger starts on an actual row.
+    list: { padding: 16, flexGrow: 1 },
     empty: { flexGrow: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
     emptyText: { color: colors.textFaint, fontSize: 15, textAlign: 'center' },
     row: {
