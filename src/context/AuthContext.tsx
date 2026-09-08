@@ -11,6 +11,10 @@ type AuthState = {
   profile: Profile | null;
   loading: boolean;
   refreshProfile: () => Promise<void>;
+  // Re-runs the same getSession + loadProfile sequence as the initial
+  // mount — used by RootNavigator's "Attempting to connect" screen's Retry
+  // button when startup is taking a while (see STARTUP_TIMEOUT_MS there).
+  retryConnection: () => Promise<void>;
   signOut: () => Promise<void>;
   deleteAccount: () => Promise<{ error: string | null }>;
   // Registration code verified on the pre-auth screen (see AuthFlow), carried
@@ -52,15 +56,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (data) writeCache<Profile>('profile', userId, data as Profile);
   }
 
-  useEffect(() => {
-    let mounted = true;
+  // Pulled out of the mount effect so it can also be called later by the
+  // "Attempting to connect" screen's Retry button (RootNavigator.tsx),
+  // not just once at startup.
+  async function checkInitialSession() {
+    setLoading(true);
+    const { data } = await supabase.auth.getSession();
+    setSession(data.session);
+    if (data.session?.user) await loadProfile(data.session.user.id);
+    setLoading(false);
+  }
 
-    supabase.auth.getSession().then(async ({ data }) => {
-      if (!mounted) return;
-      setSession(data.session);
-      if (data.session?.user) await loadProfile(data.session.user.id);
-      setLoading(false);
-    });
+  useEffect(() => {
+    checkInitialSession();
 
     const { data: sub } = supabase.auth.onAuthStateChange(async (_event, next) => {
       setSession(next);
@@ -84,7 +92,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
 
     return () => {
-      mounted = false;
       sub.subscription.unsubscribe();
       appStateSub.remove();
     };
@@ -128,6 +135,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         profile,
         loading,
         refreshProfile,
+        retryConnection: checkInitialSession,
         signOut,
         deleteAccount,
         pendingRegistrationCode,

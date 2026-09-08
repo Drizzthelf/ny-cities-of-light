@@ -36,7 +36,7 @@ const LIVE_WAIT_MS = 15 * 1000;
 // How long to wait for request_connection to actually respond before
 // treating the device as offline/unreachable and queueing the request for
 // later instead (see src/lib/offlineQueue.ts, src/components/OutboxFlusher.tsx).
-const SEND_TIMEOUT_MS = 10 * 1000;
+const SEND_TIMEOUT_MS = 5 * 1000;
 
 type RequestState =
   | 'idle'

@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { DefaultTheme, NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -25,9 +25,16 @@ import { IncomingConnectionRequestListener } from '../components/IncomingConnect
 import { RaffleWinListener } from '../components/RaffleWinListener';
 import { PushNotificationRegistrar } from '../components/PushNotificationRegistrar';
 import { OutboxFlusher } from '../components/OutboxFlusher';
+import { ConnectingScreen } from '../components/ConnectingScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
+
+// How long the initial getSession + loadProfile startup check (see
+// AuthContext.tsx) can run before swapping the plain spinner for the fuller
+// "Attempting to connect" screen with a Retry button — matches
+// ScannerScreen.tsx's SEND_TIMEOUT_MS.
+const STARTUP_TIMEOUT_MS = 5 * 1000;
 
 function ScheduleStack() {
   return (
@@ -195,8 +202,22 @@ function MainTabs() {
 }
 
 export function RootNavigator() {
-  const { session, profile, loading } = useAuth();
+  const { session, profile, loading, retryConnection } = useAuth();
   const { colors } = useTheme();
+  // Stays false for the normal, fast (<1s) cold start — only flips once
+  // `loading` has been stuck true for STARTUP_TIMEOUT_MS, swapping the
+  // plain spinner for the fuller "Attempting to connect" screen instead of
+  // leaving someone staring at a blank-looking screen with no explanation.
+  const [slowStartup, setSlowStartup] = useState(false);
+
+  useEffect(() => {
+    if (!loading) {
+      setSlowStartup(false);
+      return;
+    }
+    const timer = setTimeout(() => setSlowStartup(true), STARTUP_TIMEOUT_MS);
+    return () => clearTimeout(timer);
+  }, [loading]);
 
   // So any screen transition, default header, or the brief flash behind a
   // modal reflects the current mode's palette instead of React
@@ -218,6 +239,9 @@ export function RootNavigator() {
   );
 
   if (loading) {
+    if (slowStartup) {
+      return <ConnectingScreen onRetry={retryConnection} />;
+    }
     return (
       <View style={{ flex: 1, justifyContent: 'center', backgroundColor: colors.background }}>
         <ActivityIndicator size="large" color={colors.primary} />
