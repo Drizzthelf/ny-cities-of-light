@@ -131,6 +131,7 @@ function EventsSection() {
       </TouchableOpacity>
 
       <FlatList
+        style={styles.listFlex}
         contentContainerStyle={styles.list}
         data={events}
         keyExtractor={(item) => item.id}
@@ -504,6 +505,7 @@ function DoublePointsSection() {
       </TouchableOpacity>
 
       <FlatList
+        style={styles.listFlex}
         contentContainerStyle={styles.list}
         data={windows}
         keyExtractor={(item) => item.id}
@@ -786,6 +788,7 @@ function RaffleSection() {
       </Text>
 
       <FlatList
+        style={styles.listFlex}
         contentContainerStyle={styles.list}
         data={prizes}
         keyExtractor={(item) => item.id}
@@ -1097,6 +1100,7 @@ function UsersSection() {
       />
 
       <FlatList
+        style={styles.listFlex}
         contentContainerStyle={styles.list}
         data={visibleProfiles}
         keyExtractor={(item) => item.id}
@@ -1241,6 +1245,7 @@ function FeedSection() {
       </TouchableOpacity>
 
       <FlatList
+        style={styles.listFlex}
         contentContainerStyle={styles.list}
         data={announcements}
         keyExtractor={(item) => item.id}
@@ -1359,6 +1364,7 @@ function ReportsSection() {
   return (
     <View style={styles.sectionContainer}>
       <FlatList
+        style={styles.listFlex}
         contentContainerStyle={styles.list}
         data={reports}
         keyExtractor={(item) => item.id}
@@ -1418,6 +1424,13 @@ function getStyles(colors: ColorScheme) {
   tabText: { fontSize: 13, color: colors.textFaint, fontWeight: '600' },
   tabTextActive: { color: colors.primary },
   sectionContainer: { flex: 1 },
+  // Every FlatList in this file was only ever given a contentContainerStyle,
+  // never a style — without flex: 1 on the FlatList's own frame, it isn't
+  // bounded to fill its parent, so it doesn't properly virtualize/scroll
+  // once the list is longer than fits on screen (e.g. Users once
+  // attendees start signing up, or Events once the full schedule is
+  // entered). Same root cause as the Guideline 4 ScrollView fix.
+  listFlex: { flex: 1 },
   addButton: { margin: 14, padding: 12, borderRadius: 10, backgroundColor: colors.primary, alignItems: 'center' },
   dangerButton: { backgroundColor: colors.danger },
   addButtonText: { color: '#fff', fontWeight: '600', fontSize: 14 },

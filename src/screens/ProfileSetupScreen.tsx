@@ -205,7 +205,7 @@ export function ProfileSetupScreen({ mode = 'create', onSaved }: Props) {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       {mode === 'edit' && <ScreenHeader title="Edit profile" />}
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+      <ScrollView style={styles.flexOne} contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         {mode === 'create' && <Text style={styles.title}>Create your profile</Text>}
 
         {needsCodeInput && (

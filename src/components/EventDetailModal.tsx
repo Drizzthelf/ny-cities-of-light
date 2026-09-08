@@ -34,7 +34,7 @@ export function EventDetailModal({ event, onClose, onOpenMaps }: Props) {
     <Modal visible={!!event} transparent animationType="slide" onRequestClose={onClose}>
       <TouchableOpacity style={styles.backdrop} activeOpacity={1} onPress={onClose}>
         <TouchableOpacity style={styles.card} activeOpacity={1} onPress={() => {}}>
-          <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+          <ScrollView style={styles.scrollFlex} contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
             {event?.image_url ? (
               <Image source={{ uri: event.image_url }} style={styles.photo} />
             ) : null}
@@ -74,6 +74,14 @@ function getStyles(colors: ColorScheme) {
       maxHeight: '85%',
       paddingBottom: 20,
     },
+    // flexShrink (not flex/flexGrow) — `card` above only caps height at
+    // 85% via maxHeight, it doesn't set an explicit height, so this should
+    // hug short content instead of always stretching to the cap. Without
+    // this at all, the ScrollView had no bound of its own and a long
+    // description could get clipped by the card's maxHeight with no way
+    // to actually scroll to the rest — same root cause as the Guideline 4
+    // fix elsewhere, just inside a bottom sheet instead of a full screen.
+    scrollFlex: { flexShrink: 1 },
     scroll: { padding: 24 },
     photo: { width: '100%', height: 180, borderRadius: 14, marginBottom: 16, backgroundColor: colors.borderLight },
     // Plain bold sans, not fonts.title (PlayfairDisplay italic) — matches
