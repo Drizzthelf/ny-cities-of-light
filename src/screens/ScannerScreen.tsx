@@ -12,7 +12,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
-import { withRetry } from '../lib/withRetry';
+import { withRetry, isTransient } from '../lib/withRetry';
 import { enqueueRequest, isQueued } from '../lib/offlineQueue';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
@@ -319,7 +319,15 @@ export function ScannerScreen() {
     const result = await Promise.race([attempt, timedOut]);
     inFlightRef.current.delete(targetId);
 
-    if (result === 'timeout') {
+    // A fully offline device doesn't make request_connection hang until
+    // SEND_TIMEOUT_MS — fetch fails immediately, withRetry's 3 quick
+    // attempts burn through in ~1-2s, and the race above resolves to
+    // `attempt`'s result long before the timeout branch would ever fire.
+    // So "no network" has to be detected here too, not just via the
+    // timeout — anything withRetry gave up on because it was transient
+    // (network/fetch/timeout — see isTransient) gets queued exactly like a
+    // real timeout would.
+    if (result === 'timeout' || isTransient(result.error)) {
       // The original call isn't cancelled — if it does land late and
       // actually succeeds, the queued retry below just hits
       // request_connection's own "already have a pending request" check
