@@ -29,13 +29,6 @@ type SentRow = ConnectionRequest & { target: Profile };
 type ReceivedRow = ConnectionRequest & { requester: Profile };
 type RequestsCache = { sent: SentRow[]; received: ReceivedRow[] };
 
-const STATUS_LABELS: Record<ConnectionRequest['status'], string> = {
-  pending: 'Pending',
-  accepted: 'Accepted',
-  declined: 'Declined',
-  expired: 'Expired',
-};
-
 // "Today" per the conference's own clock (America/New_York), matching
 // scans.scan_date's day boundary — see
 // supabase/migrations/20260903000100_repeat_scans.sql. en-CA formats as
@@ -144,11 +137,10 @@ export function ContactsScreen() {
     load();
   }, [load]);
 
-  // Sent: every request I've made, any status, newest first — a running
-  // history. Received: only 'pending' ones — the "requests" enum has no
-  // path back out of pending except accepted/declined/expired, so a
-  // resolved one dropping out of this list once acted on is expected, not
-  // a bug.
+  // Both sides filtered to 'pending' only, per user decision — this tab is
+  // for what's still actionable/outstanding, not a history log. Once a
+  // request resolves (accepted/declined/expired) it naturally drops out of
+  // both lists on the next load/realtime update, nothing else to clean up.
   const loadRequests = useCallback(async () => {
     if (!session?.user) return;
     const [{ data: sent, error: sentError }, { data: received, error: receivedError }] = await Promise.all([
@@ -156,6 +148,7 @@ export function ContactsScreen() {
         .from('connection_requests')
         .select('*, target:profiles!connection_requests_target_id_fkey(*, profile_socials(*))')
         .eq('requester_id', session.user.id)
+        .eq('status', 'pending')
         .order('created_at', { ascending: false }),
       supabase
         .from('connection_requests')
@@ -394,11 +387,11 @@ export function ContactsScreen() {
                     <Avatar photoUrl={item.target.photo_url} name={item.target.first_name} size={48} />
                     <View style={styles.rowText}>
                       <Text style={styles.name}>{item.target.first_name}</Text>
-                      <Text style={styles.requestMeta}>{new Date(item.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' })}</Text>
+                      <Text style={styles.requestMeta}>
+                        Sent {new Date(item.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+                      </Text>
                     </View>
-                    <Text style={[styles.statusBadge, styles[`statusBadge_${item.status}`]]}>
-                      {STATUS_LABELS[item.status]}
-                    </Text>
+                    <Text style={styles.statusBadge}>Pending</Text>
                   </View>
                 ))
               )}
@@ -577,11 +570,18 @@ function getStyles(colors: ColorScheme) {
     requestBtnDeclineText: { color: colors.textMuted, fontWeight: '600', fontSize: 13 },
     requestBtnAccept: { backgroundColor: colors.primary },
     requestBtnAcceptText: { color: '#fff', fontWeight: '600', fontSize: 13 },
-    statusBadge: { fontSize: 11, fontWeight: '700', paddingVertical: 4, paddingHorizontal: 10, borderRadius: 20, overflow: 'hidden' },
-    statusBadge_pending: { backgroundColor: colors.primaryTint, color: colors.primary },
-    statusBadge_accepted: { backgroundColor: colors.successTint, color: colors.success },
-    statusBadge_declined: { backgroundColor: colors.dangerTint, color: colors.danger },
-    statusBadge_expired: { backgroundColor: colors.borderLight, color: colors.textFaint },
+    // Sent requests are always 'pending' now (both lists are filtered to
+    // it), so this no longer needs per-status color variants.
+    statusBadge: {
+      fontSize: 11,
+      fontWeight: '700',
+      paddingVertical: 4,
+      paddingHorizontal: 10,
+      borderRadius: 20,
+      overflow: 'hidden',
+      backgroundColor: colors.primaryTint,
+      color: colors.primary,
+    },
     detailBackdrop: {
       flex: 1,
       backgroundColor: colors.overlay,
