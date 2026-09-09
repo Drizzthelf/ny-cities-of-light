@@ -19,18 +19,24 @@ Deno.serve(async () => {
     const now = new Date();
     const tenMinAgo = new Date(now.getTime() - 10 * 60 * 1000);
 
-    const { data: windows } = await admin
+    const { data: windows, error: windowsError } = await admin
       .from('double_points_windows')
       .select('id, end_time')
       .is('start_notified_at', null)
       .lte('start_time', now.toISOString())
       .gt('start_time', tenMinAgo.toISOString());
 
+    if (windowsError) {
+      return new Response(JSON.stringify({ error: windowsError.message }), { status: 500 });
+    }
     if (!windows?.length) {
       return new Response(JSON.stringify({ skipped: 'no windows' }), { status: 200 });
     }
 
-    const { data: tokens } = await admin.from('push_tokens').select('token');
+    const { data: tokens, error: tokensError } = await admin.from('push_tokens').select('token');
+    if (tokensError) {
+      return new Response(JSON.stringify({ error: tokensError.message }), { status: 500 });
+    }
 
     for (const w of windows) {
       if (tokens?.length) {

@@ -6,6 +6,7 @@ import { supabase } from '../lib/supabase';
 import { clearAllCaches, readCache, writeCache } from '../lib/offlineCache';
 import { clearAllQueues } from '../lib/offlineQueue';
 import { withTimeout } from '../lib/withRetry';
+import { unregisterPushNotifications } from '../lib/pushNotifications';
 import type { Profile } from '../types/database';
 
 // Bounds how long startup/resume will wait on getSession + loadProfile
@@ -122,6 +123,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   async function signOut() {
+    // Must happen before the session is torn down below -- the delete is
+    // RLS-scoped to auth.uid() = user_id, so it can only remove this
+    // device's row while still signed in. Best-effort/timeout-guarded like
+    // everything else here: a device that's offline right now shouldn't
+    // block sign-out over it.
+    await withTimeout(() => unregisterPushNotifications(), AUTH_TIMEOUT_MS);
+
     // supabase-js only clears the *local* session after its network call
     // to revoke the session server-side succeeds -- offline, that call
     // fails (or hangs) and the local session is left untouched, silently

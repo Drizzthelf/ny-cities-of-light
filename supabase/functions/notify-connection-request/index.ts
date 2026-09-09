@@ -23,21 +23,27 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
 
-    const { data: request } = await admin
+    const { data: request, error: requestError } = await admin
       .from('connection_requests')
       .select('target_id, requester:profiles!connection_requests_requester_id_fkey(first_name)')
       .eq('id', request_id)
       .maybeSingle();
 
+    if (requestError) {
+      return new Response(JSON.stringify({ error: requestError.message }), { status: 500 });
+    }
     if (!request?.target_id) {
       return new Response(JSON.stringify({ skipped: 'request not found' }), { status: 200 });
     }
 
-    const { data: tokens } = await admin
+    const { data: tokens, error: tokensError } = await admin
       .from('push_tokens')
       .select('token')
       .eq('user_id', request.target_id);
 
+    if (tokensError) {
+      return new Response(JSON.stringify({ error: tokensError.message }), { status: 500 });
+    }
     if (!tokens?.length) {
       return new Response(JSON.stringify({ skipped: 'no tokens' }), { status: 200 });
     }

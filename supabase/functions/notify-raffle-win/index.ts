@@ -20,21 +20,27 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
 
-    const { data: prize } = await admin
+    const { data: prize, error: prizeError } = await admin
       .from('raffle_prizes')
       .select('title, winner_id')
       .eq('id', prize_id)
       .maybeSingle();
 
+    if (prizeError) {
+      return new Response(JSON.stringify({ error: prizeError.message }), { status: 500 });
+    }
     if (!prize?.winner_id) {
       return new Response(JSON.stringify({ skipped: 'no winner' }), { status: 200 });
     }
 
-    const { data: tokens } = await admin
+    const { data: tokens, error: tokensError } = await admin
       .from('push_tokens')
       .select('token')
       .eq('user_id', prize.winner_id);
 
+    if (tokensError) {
+      return new Response(JSON.stringify({ error: tokensError.message }), { status: 500 });
+    }
     if (!tokens?.length) {
       return new Response(JSON.stringify({ skipped: 'no tokens' }), { status: 200 });
     }
