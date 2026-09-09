@@ -10,6 +10,7 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
@@ -25,6 +26,7 @@ export function RaffleScreen() {
   const { colors } = useTheme();
   const styles = useMemo(() => getStyles(colors), [colors]);
   const navigation = useNavigation<any>();
+  const { height: windowHeight } = useWindowDimensions();
   const [points, setPoints] = useState(0);
   const [myTickets, setMyTickets] = useState(0);
   const [pointsToNext, setPointsToNext] = useState<number | null>(null);
@@ -160,7 +162,7 @@ export function RaffleScreen() {
         <TouchableOpacity style={styles.rulesBackdrop} activeOpacity={1} onPress={() => setRulesVisible(false)}>
           <TouchableOpacity style={styles.rulesCard} activeOpacity={1} onPress={() => {}}>
             <Text style={styles.rulesTitle}>How the raffle works</Text>
-            <ScrollView style={styles.rulesScroll}>
+            <ScrollView style={[styles.rulesScroll, { maxHeight: windowHeight * 0.6 }]}>
               <Text style={styles.rulesSectionHeading}>Earning points</Text>
               <Text style={styles.rulesText}>
                 • Scanning someone new is worth 10 points (20 during a 2x points window).{'\n'}
@@ -366,15 +368,19 @@ function getStyles(colors: ColorScheme) {
     infoButton: { paddingVertical: 12, paddingHorizontal: 12, alignItems: 'flex-end' },
     infoButtonText: { color: colors.textOnDark, fontSize: 20, fontWeight: '700' },
     rulesBackdrop: { flex: 1, backgroundColor: colors.overlay, justifyContent: 'center', padding: 24 },
-    // maxHeight alone doesn't make a ScrollView child actually scroll — a
-    // ScrollView sizes to its own content unless it's given a bounded
-    // height via flex, so it was overflowing the card (visually cut off at
-    // the rounded corner) instead of scrolling. flex: 1 here makes it fill
-    // whatever space is left after the title within rulesCard's maxHeight,
-    // which is what makes internal scrolling kick in.
     rulesCard: { backgroundColor: colors.surface, borderRadius: 16, padding: 20, maxHeight: '80%' },
     rulesTitle: { fontSize: 19, fontFamily: fonts.title, color: colors.text, marginBottom: 12 },
-    rulesScroll: { flex: 1 },
+    // A flex: 1 child inside a parent whose height is only capped
+    // (rulesCard's maxHeight, not a fixed height) collapses to zero height
+    // in RN's layout engine -- flex-grow needs a definite parent size to
+    // distribute space within, and "auto, capped at 80%" isn't definite
+    // until content is measured. That made the whole rules body vanish,
+    // leaving just the title and the Got it button. A direct numeric
+    // maxHeight (set inline above, derived from the window height so it
+    // scales across phone/tablet sizes) bounds the ScrollView itself
+    // instead of relying on flex-grow, so it both scrolls when content
+    // overflows and shrinks to fit when it doesn't.
+    rulesScroll: {},
     rulesSectionHeading: { fontSize: 13, fontWeight: '700', color: colors.primary, marginTop: 14 },
     rulesText: { fontSize: 13, color: colors.textSecondary, marginTop: 6, lineHeight: 19 },
     rulesCloseBtn: { marginTop: 16, backgroundColor: colors.primary, borderRadius: 10, paddingVertical: 12, alignItems: 'center' },

@@ -15,6 +15,7 @@ import { useNavigation } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
 import { withRetry, isTransient } from '../lib/withRetry';
 import { enqueueRequest, isQueued } from '../lib/offlineQueue';
+import { readCache } from '../lib/offlineCache';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { Avatar } from '../components/Avatar';
@@ -290,11 +291,26 @@ export function ScannerScreen() {
 
     withRetry(() =>
       supabase.from('scans').select('scan_date').eq('scanner_id', session.user!.id).eq('scanned_id', code)
-    ).then(({ data: existingScans }) => {
-      if (!existingScans) return;
-      const todayEt = easternDateString();
-      setPriorScanCount(existingScans.length);
-      setScannedTodayAlready(existingScans.some((s) => s.scan_date === todayEt));
+    ).then(async ({ data: existingScans }) => {
+      if (existingScans) {
+        const todayEt = easternDateString();
+        setPriorScanCount(existingScans.length);
+        setScannedTodayAlready(existingScans.some((s) => s.scan_date === todayEt));
+        return;
+      }
+      // Offline (or otherwise unreachable) -- fall back to the locally
+      // cached contact list (see InitialDataPrefetcher.tsx / prefetch.ts,
+      // ContactsScreen.tsx) so scanning someone already scanned today still
+      // says so instead of looking like a brand-new scan just because the
+      // live check above couldn't run. Same cache key/shape those write.
+      const cached = await readCache<{
+        rows: { id: string; scan_count: number; last_scan_date: string }[];
+      }>('contacts', session.user!.id);
+      const contact = cached?.data.rows.find((r) => r.id === code);
+      if (contact) {
+        setPriorScanCount(contact.scan_count);
+        setScannedTodayAlready(contact.last_scan_date === easternDateString());
+      }
     });
 
     // Best-effort hint, checked fresh per scan — the server
