@@ -66,7 +66,7 @@ export function CompletedRaffleScreen() {
                 {item.description ? <Text style={styles.description}>{item.description}</Text> : null}
                 <View style={[styles.drawnBox, isWinner && styles.drawnBoxWon]}>
                   <Text style={[styles.drawnText, isWinner && styles.drawnTextWon]}>
-                    {isWinner ? '🎉 You won this prize!' : 'A winner has been drawn'}
+                    {isWinner ? '🎉 You won this prize!' : 'Someone else has won this prize'}
                   </Text>
                 </View>
               </View>
