@@ -164,7 +164,17 @@ export function RaffleScreen() {
       />
       <Modal visible={rulesVisible} transparent animationType="fade" onRequestClose={() => setRulesVisible(false)}>
         <TouchableOpacity style={styles.rulesBackdrop} activeOpacity={1} onPress={() => setRulesVisible(false)}>
-          <TouchableOpacity style={styles.rulesCard} activeOpacity={1} onPress={() => {}}>
+          {/* Plain View, not a nested TouchableOpacity -- an ancestor
+              Touchable claims the JS responder on touch-start, before the
+              ScrollView below ever gets a chance to recognize a drag as a
+              scroll gesture, which silently ate every scroll attempt no
+              matter how the box was sized. A bare View doesn't compete for
+              that responder, so the ScrollView's own native scroll handling
+              gets an uncontested touch path. Tapping non-interactive text
+              in the card can now bubble up and dismiss the modal (same as
+              tapping the backdrop) -- an acceptable trade next to "can't
+              read the rules at all." */}
+          <View style={styles.rulesCard}>
             <Text style={styles.rulesTitle}>How the raffle works</Text>
             <ScrollView style={[styles.rulesScroll, { height: rulesScrollHeight }]}>
               <Text style={styles.rulesSectionHeading}>Earning points</Text>
@@ -190,7 +200,7 @@ export function RaffleScreen() {
             <TouchableOpacity style={styles.rulesCloseBtn} onPress={() => setRulesVisible(false)}>
               <Text style={styles.rulesCloseBtnText}>Got it</Text>
             </TouchableOpacity>
-          </TouchableOpacity>
+          </View>
         </TouchableOpacity>
       </Modal>
       <FlatList
