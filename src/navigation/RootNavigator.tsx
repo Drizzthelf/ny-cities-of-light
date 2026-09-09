@@ -26,6 +26,7 @@ import { RaffleWinListener } from '../components/RaffleWinListener';
 import { PushNotificationRegistrar } from '../components/PushNotificationRegistrar';
 import { OutboxFlusher } from '../components/OutboxFlusher';
 import { ConnectingScreen } from '../components/ConnectingScreen';
+import { InitialDataPrefetcher } from '../components/InitialDataPrefetcher';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -262,6 +263,7 @@ export function RootNavigator() {
           <RaffleWinListener />
           <PushNotificationRegistrar />
           <OutboxFlusher />
+          <InitialDataPrefetcher />
         </>
       )}
     </NavigationContainer>
