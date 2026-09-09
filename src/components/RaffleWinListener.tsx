@@ -55,7 +55,17 @@ export function RaffleWinListener() {
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, [profile]);
+    // profile?.id, not profile — refreshProfile() (called on every Profile
+    // tab focus) hands back a brand-new profile object each time even when
+    // nothing changed. Depending on the whole object tore this down and
+    // re-subscribed + re-polled on every such refresh, and if that repoll
+    // landed in the gap between dismiss()'s optimistic local clear and its
+    // ack_raffle_win RPC actually committing server-side, it would refetch
+    // the still-winner_seen=false row and show the "You won" modal a second
+    // time right after it had just been dismissed. Keying on the id keeps
+    // this effect stable across those refreshes and only rerun on a real
+    // sign-in/out.
+  }, [profile?.id]);
 
   async function dismiss() {
     const current = queue[0];
