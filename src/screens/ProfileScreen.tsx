@@ -1,6 +1,5 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { ActivityIndicator, Image, ImageBackground, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { OfflineBanner } from '../components/OfflineBanner';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -51,7 +50,6 @@ export function ProfileScreen({ onViewContacts }: Props) {
   return (
     <ImageBackground source={SKYLINE} style={styles.bg} resizeMode="cover">
       <SafeAreaView style={styles.safeArea} edges={['top', 'bottom', 'left', 'right']}>
-        <OfflineBanner />
         <ScrollView style={styles.scroll} contentContainerStyle={styles.container}>
           <Text style={styles.logoHeadline}>{'Anchored\nin ✶ Christ'}</Text>
           <Text style={styles.logoSub}>– Cities of Light –</Text>

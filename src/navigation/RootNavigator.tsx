@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { DefaultTheme, NavigationContainer } from '@react-navigation/native';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { BottomTabBar, createBottomTabNavigator, type BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
@@ -27,6 +27,7 @@ import { PushNotificationRegistrar } from '../components/PushNotificationRegistr
 import { OutboxFlusher } from '../components/OutboxFlusher';
 import { ConnectingScreen } from '../components/ConnectingScreen';
 import { InitialDataPrefetcher } from '../components/InitialDataPrefetcher';
+import { OfflineBanner } from '../components/OfflineBanner';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -85,6 +86,24 @@ function SettingsStack() {
   );
 }
 
+// Stacks OfflineBanner directly above the real bottom tab bar instead of
+// rendering it absolutely-positioned ourselves — BottomTabBar already
+// handles the bottom safe-area inset correctly across every device (iPhone
+// SE, Pro Max, iPad, Android nav styles, portrait/landscape), so putting
+// the banner right above it in normal flow means it inherits that same
+// device handling for free, rather than us re-deriving tab bar height and
+// getting it wrong on some device. One fixed location for every screen in
+// the app, since the tab bar (and now this) persists underneath every
+// pushed screen regardless of which tab it's nested in.
+function CustomTabBar(props: BottomTabBarProps) {
+  return (
+    <>
+      <OfflineBanner />
+      <BottomTabBar {...props} />
+    </>
+  );
+}
+
 function MainTabs() {
   const { profile } = useAuth();
   const { colors } = useTheme();
@@ -96,6 +115,7 @@ function MainTabs() {
   return (
     <Tab.Navigator
       initialRouteName="Profile"
+      tabBar={(props) => <CustomTabBar {...props} />}
       screenOptions={{
         headerShown: true,
         tabBarActiveTintColor: colors.primary,

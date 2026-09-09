@@ -19,7 +19,6 @@ import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { Avatar } from '../components/Avatar';
 import { ReportModal } from '../components/ReportModal';
-import { OfflineBanner } from '../components/OfflineBanner';
 import type { Event, Profile } from '../types/database';
 import { type ColorScheme } from '../theme';
 
@@ -448,7 +447,6 @@ export function ScannerScreen() {
           <Text style={styles.topBarTitle}>Scan QR</Text>
           <View style={styles.backButton} />
         </View>
-        <OfflineBanner />
       </SafeAreaView>
       <View style={styles.overlay}>
         <View style={styles.reticle} />

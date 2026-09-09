@@ -4,7 +4,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { fonts, type ColorScheme } from '../theme';
 import { useTheme } from '../context/ThemeContext';
-import { OfflineBanner } from './OfflineBanner';
 
 type Props = {
   title: string;
@@ -45,7 +44,6 @@ export function ScreenHeader({ title, backLabel = 'Back', variant = 'plain', rig
         </Text>
         <View style={styles.backButton}>{right}</View>
       </View>
-      <OfflineBanner />
     </SafeAreaView>
   );
 }

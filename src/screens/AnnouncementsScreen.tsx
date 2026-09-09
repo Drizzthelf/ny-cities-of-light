@@ -4,7 +4,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
 import { readCache, writeCache } from '../lib/offlineCache';
 import { CachedDataBanner } from '../components/CachedDataBanner';
-import { OfflineBanner } from '../components/OfflineBanner';
 import type { Announcement } from '../types/database';
 import { fonts, type ColorScheme } from '../theme';
 import { useTheme } from '../context/ThemeContext';
@@ -108,7 +107,6 @@ export function AnnouncementsScreen() {
             </Text>
             <Text style={styles.headerCitation}>— Hebrews 6:19</Text>
           </View>
-          <OfflineBanner />
           <CachedDataBanner savedAt={cacheSavedAt} style={styles.cacheBanner} />
         </>
       }

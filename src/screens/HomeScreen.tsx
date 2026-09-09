@@ -15,7 +15,6 @@ import { useTheme } from '../context/ThemeContext';
 import { supabase } from '../lib/supabase';
 import { readCache, writeCache } from '../lib/offlineCache';
 import { CachedDataBanner } from '../components/CachedDataBanner';
-import { OfflineBanner } from '../components/OfflineBanner';
 import { fonts, type ColorScheme } from '../theme';
 
 type HomeCounts = { scanCount: number; checkinCount: number; points: number };
@@ -173,7 +172,6 @@ export function HomeScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <OfflineBanner />
       <ScrollView style={styles.scroll} contentContainerStyle={styles.container}>
       <Text style={styles.greeting}>Hi, {profile.first_name}</Text>
 
