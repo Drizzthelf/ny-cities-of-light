@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  AppState,
   Alert,
   Modal,
   StyleSheet,
@@ -143,31 +142,12 @@ export function ScannerScreen() {
   // in handleSendRequest only catches an attempt that already finished
   // queueing, not one still in flight).
   const inFlightRef = useRef<Set<string>>(new Set());
-  // Forces CameraView to fully unmount/remount (via its key prop below)
-  // whenever the app returns to the foreground. Works around a known iOS
-  // issue where the AVCaptureSession is created but never actually starts
-  // streaming frames to the preview layer right after the permission
-  // dialog dismisses — a black screen that only ever resolved by
-  // backgrounding the app (e.g. opening the native Camera app) and coming
-  // back, which is itself just an inactive->active transition. Doing that
-  // same remount automatically on every such transition — including the
-  // one the permission dialog itself causes — fixes it without requiring
-  // the manual workaround. Confirmed worse on iPad in the field, but not
-  // iPad-specific in cause.
-  const [cameraKey, setCameraKey] = useState(0);
 
   useEffect(() => {
     if (permission && !permission.granted && permission.canAskAgain) {
       requestPermission();
     }
   }, [permission, requestPermission]);
-
-  useEffect(() => {
-    const sub = AppState.addEventListener('change', (state) => {
-      if (state === 'active') setCameraKey((k) => k + 1);
-    });
-    return () => sub.remove();
-  }, []);
 
   // Live-updates the "waiting..." state once the target accepts/declines.
   // Scoped to this one request's own row (id=eq.<id>), not a broadcast to
@@ -418,7 +398,6 @@ export function ScannerScreen() {
   return (
     <View style={styles.container}>
       <CameraView
-        key={cameraKey}
         style={StyleSheet.absoluteFill}
         facing="back"
         autofocus="on"
