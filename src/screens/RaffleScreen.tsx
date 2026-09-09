@@ -2,9 +2,9 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  BackHandler,
   FlatList,
   Image,
-  Modal,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -42,6 +42,19 @@ export function RaffleScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [rulesVisible, setRulesVisible] = useState(false);
+
+  // RN's <Modal> handles the hardware back button itself (onRequestClose)
+  // -- now that the rules panel is a plain in-tree overlay instead (see
+  // JSX below), that needs doing by hand to keep the same Android
+  // behavior.
+  useEffect(() => {
+    if (!rulesVisible) return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      setRulesVisible(false);
+      return true;
+    });
+    return () => sub.remove();
+  }, [rulesVisible]);
 
   const load = useCallback(async () => {
     if (!profile) return;
@@ -162,19 +175,32 @@ export function RaffleScreen() {
           </TouchableOpacity>
         }
       />
-      <Modal visible={rulesVisible} transparent animationType="fade" onRequestClose={() => setRulesVisible(false)}>
-        <TouchableOpacity style={styles.rulesBackdrop} activeOpacity={1} onPress={() => setRulesVisible(false)}>
-          {/* Plain View, not a nested TouchableOpacity -- an ancestor
-              Touchable claims the JS responder on touch-start, before the
-              ScrollView below ever gets a chance to recognize a drag as a
-              scroll gesture, which silently ate every scroll attempt no
-              matter how the box was sized. A bare View doesn't compete for
-              that responder, so the ScrollView's own native scroll handling
-              gets an uncontested touch path. Tapping non-interactive text
-              in the card can now bubble up and dismiss the modal (same as
-              tapping the backdrop) -- an acceptable trade next to "can't
-              read the rules at all." */}
-          <View style={styles.rulesCard}>
+      {rulesVisible && (
+        // Plain in-tree overlay, not RN's <Modal> -- this project runs
+        // React Native's New Architecture (Fabric), which has documented
+        // upstream bugs around touch/scroll gestures not propagating
+        // correctly across Modal's separate native presentation layer
+        // (RCTModalHostView is effectively a separate native window from
+        // the rest of the screen). Confirmed on-device: neither a sizing
+        // fix nor removing the nested-Touchable responder conflict made
+        // the ScrollView below scrollable while it was still inside
+        // <Modal>, on either iPad or phone. Rendering this as a normal
+        // absolutely-positioned sibling keeps it in the same Fabric touch
+        // tree as the rest of the screen, avoiding that boundary
+        // entirely -- the same "route around the Fabric bug instead of
+        // fighting it" call already made for the back button in
+        // ScreenHeader.tsx.
+        <View style={styles.rulesOverlay}>
+          <TouchableOpacity style={styles.rulesBackdrop} activeOpacity={1} onPress={() => setRulesVisible(false)}>
+            {/* Plain View, not a nested TouchableOpacity -- an ancestor
+                Touchable claims the JS responder on touch-start, before the
+                ScrollView below ever gets a chance to recognize a drag as a
+                scroll gesture. A bare View doesn't compete for that
+                responder. Tapping non-interactive text in the card can now
+                bubble up and dismiss the panel (same as tapping the
+                backdrop) -- an acceptable trade next to "can't read the
+                rules at all." */}
+            <View style={styles.rulesCard}>
             <Text style={styles.rulesTitle}>How the raffle works</Text>
             <ScrollView style={[styles.rulesScroll, { height: rulesScrollHeight }]}>
               <Text style={styles.rulesSectionHeading}>Earning points</Text>
@@ -200,9 +226,10 @@ export function RaffleScreen() {
             <TouchableOpacity style={styles.rulesCloseBtn} onPress={() => setRulesVisible(false)}>
               <Text style={styles.rulesCloseBtnText}>Got it</Text>
             </TouchableOpacity>
-          </View>
-        </TouchableOpacity>
-      </Modal>
+            </View>
+          </TouchableOpacity>
+        </View>
+      )}
       <FlatList
         style={styles.container}
         contentContainerStyle={styles.list}
@@ -381,6 +408,10 @@ function getStyles(colors: ColorScheme) {
     drawnTextWon: { color: colors.highlightText },
     infoButton: { paddingVertical: 12, paddingHorizontal: 12, alignItems: 'flex-end' },
     infoButtonText: { color: colors.textOnDark, fontSize: 20, fontWeight: '700' },
+    // Sits above everything else on this screen (the FlatList, header,
+    // etc.) now that it's a plain sibling in normal flow rather than a
+    // separately-presented <Modal>.
+    rulesOverlay: { ...StyleSheet.absoluteFillObject, zIndex: 1000, elevation: 1000 },
     rulesBackdrop: { flex: 1, backgroundColor: colors.overlay, justifyContent: 'center', padding: 24 },
     rulesCard: { backgroundColor: colors.surface, borderRadius: 16, padding: 20, maxHeight: '80%' },
     rulesTitle: { fontSize: 19, fontFamily: fonts.title, color: colors.text, marginBottom: 12 },
