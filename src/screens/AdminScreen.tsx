@@ -761,6 +761,28 @@ function RaffleSection() {
     );
   }
 
+  function confirmRedraw(prize: RafflePrize) {
+    const currentWinner = prize.winner_id ? winnerNames[prize.winner_id] ?? 'the current winner' : 'the current winner';
+    Alert.alert(
+      'Redraw this prize?',
+      `This picks a new winner for "${prize.title}" and excludes ${currentWinner}'s tickets from the drawing — only use this if they haven't come forward to claim it. This can't be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Redraw',
+          style: 'destructive',
+          onPress: async () => {
+            setDrawing(prize.id);
+            const { error } = await supabase.rpc('redraw_raffle_winner', { p_prize_id: prize.id });
+            setDrawing(null);
+            if (error) Alert.alert('Error', error.message);
+            else load();
+          },
+        },
+      ]
+    );
+  }
+
   function confirmDelete(prize: RafflePrize) {
     Alert.alert('Delete prize?', `Remove "${prize.title}" and all its ticket entries?`, [
       { text: 'Cancel', style: 'cancel' },
@@ -782,9 +804,9 @@ function RaffleSection() {
         <Text style={styles.addButtonText}>+ Add prize</Text>
       </TouchableOpacity>
       <Text style={styles.sectionNote}>
-        Deleting a prize refunds its tickets back to whoever had assigned them. A prize with no
-        "Draw" button next to its name has already been drawn — leave it there as the record of
-        who won it, rather than deleting it.
+        Deleting a prize refunds its tickets back to whoever had assigned them. A drawn prize
+        shows "Redraw" instead of "Draw" — use it if the winner doesn't come forward to claim
+        their prize; it excludes their tickets and picks someone new.
       </Text>
 
       <FlatList
@@ -824,6 +846,15 @@ function RaffleSection() {
                   disabled={drawing === item.id}
                 >
                   <Text style={styles.actionBtnText}>{drawing === item.id ? '...' : 'Draw'}</Text>
+                </TouchableOpacity>
+              )}
+              {item.drawn_at && (
+                <TouchableOpacity
+                  style={styles.actionBtn}
+                  onPress={() => confirmRedraw(item)}
+                  disabled={drawing === item.id}
+                >
+                  <Text style={styles.actionBtnText}>{drawing === item.id ? '...' : 'Redraw'}</Text>
                 </TouchableOpacity>
               )}
               <TouchableOpacity style={styles.actionBtn} onPress={() => setEditing(item)}>
