@@ -10,7 +10,6 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
-  useWindowDimensions,
   View,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
@@ -26,11 +25,6 @@ export function RaffleScreen() {
   const { colors } = useTheme();
   const styles = useMemo(() => getStyles(colors), [colors]);
   const navigation = useNavigation<any>();
-  const { height: windowHeight } = useWindowDimensions();
-  // A plain fixed height, not a cap -- see rulesScroll comment below for
-  // why maxHeight/flex both failed here. Scales down on shorter phones,
-  // caps out on tablets so the box doesn't balloon to an odd size there.
-  const rulesScrollHeight = Math.min(windowHeight * 0.5, 380);
   const [points, setPoints] = useState(0);
   const [myTickets, setMyTickets] = useState(0);
   const [pointsToNext, setPointsToNext] = useState<number | null>(null);
@@ -179,30 +173,34 @@ export function RaffleScreen() {
         // Plain in-tree overlay, not RN's <Modal> -- this project runs
         // React Native's New Architecture (Fabric), which has documented
         // upstream bugs around touch/scroll gestures not propagating
-        // correctly across Modal's separate native presentation layer
-        // (RCTModalHostView is effectively a separate native window from
-        // the rest of the screen). Confirmed on-device: neither a sizing
-        // fix nor removing the nested-Touchable responder conflict made
-        // the ScrollView below scrollable while it was still inside
-        // <Modal>, on either iPad or phone. Rendering this as a normal
-        // absolutely-positioned sibling keeps it in the same Fabric touch
-        // tree as the rest of the screen, avoiding that boundary
-        // entirely -- the same "route around the Fabric bug instead of
-        // fighting it" call already made for the back button in
-        // ScreenHeader.tsx.
+        // correctly across Modal's separate native presentation layer.
+        //
+        // The backdrop is a SIBLING of rulesCard here, not its parent --
+        // a previous version had the dismiss TouchableOpacity wrapping
+        // rulesCard, which still put a Touchable ancestor directly above
+        // the ScrollView and still ate its drag gesture (confirmed
+        // on-device, both iPad and phone -- moving out of Modal alone
+        // didn't fix it, because this was the actual remaining cause).
+        // With the backdrop absolutely-filling the overlay behind the
+        // card instead of wrapping it, the ScrollView's ancestor chain is
+        // just plain Views: rulesOverlay -> rulesCard -> ScrollView, no
+        // Touchable in between to compete for the responder. A tap that
+        // lands on the card hits the card (rendered on top); a tap
+        // outside it falls through to the backdrop behind.
         <View style={styles.rulesOverlay}>
-          <TouchableOpacity style={styles.rulesBackdrop} activeOpacity={1} onPress={() => setRulesVisible(false)}>
-            {/* Plain View, not a nested TouchableOpacity -- an ancestor
-                Touchable claims the JS responder on touch-start, before the
-                ScrollView below ever gets a chance to recognize a drag as a
-                scroll gesture. A bare View doesn't compete for that
-                responder. Tapping non-interactive text in the card can now
-                bubble up and dismiss the panel (same as tapping the
-                backdrop) -- an acceptable trade next to "can't read the
-                rules at all." */}
-            <View style={styles.rulesCard}>
+          <TouchableOpacity
+            style={styles.rulesBackdrop}
+            activeOpacity={1}
+            onPress={() => setRulesVisible(false)}
+          />
+          <View style={styles.rulesCard}>
             <Text style={styles.rulesTitle}>How the raffle works</Text>
-            <ScrollView style={[styles.rulesScroll, { height: rulesScrollHeight }]}>
+            <ScrollView
+              style={styles.rulesScroll}
+              contentContainerStyle={styles.rulesScrollContent}
+              showsVerticalScrollIndicator
+              nestedScrollEnabled
+            >
               <Text style={styles.rulesSectionHeading}>Earning points</Text>
               <Text style={styles.rulesText}>
                 • Scanning someone new is worth 10 points (20 during a 2x points window).{'\n'}
@@ -226,8 +224,7 @@ export function RaffleScreen() {
             <TouchableOpacity style={styles.rulesCloseBtn} onPress={() => setRulesVisible(false)}>
               <Text style={styles.rulesCloseBtnText}>Got it</Text>
             </TouchableOpacity>
-            </View>
-          </TouchableOpacity>
+          </View>
         </View>
       )}
       <FlatList
@@ -412,19 +409,30 @@ function getStyles(colors: ColorScheme) {
     // etc.) now that it's a plain sibling in normal flow rather than a
     // separately-presented <Modal>.
     rulesOverlay: { ...StyleSheet.absoluteFillObject, zIndex: 1000, elevation: 1000 },
-    rulesBackdrop: { flex: 1, backgroundColor: colors.overlay, justifyContent: 'center', padding: 24 },
-    rulesCard: { backgroundColor: colors.surface, borderRadius: 16, padding: 20, maxHeight: '80%' },
+    // A sibling of rulesCard, not its parent -- see the comment above the
+    // JSX for why. absoluteFillObject makes it cover the whole overlay
+    // behind the card.
+    rulesBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: colors.overlay },
+    // top/bottom (not maxHeight) give this a genuinely definite resolved
+    // height -- rulesOverlay is a full-screen-bounded parent, so "10% from
+    // top, 10% from bottom" fully determines rulesCard's height. That's
+    // what makes rulesScroll's flex: 1 below actually work: flex-grow
+    // needs a definite parent size to distribute space within, which a
+    // maxHeight-only cap doesn't provide (that's what collapsed the
+    // ScrollView to zero height in an earlier version of this).
+    rulesCard: {
+      position: 'absolute',
+      left: 24,
+      right: 24,
+      top: '10%',
+      bottom: '10%',
+      backgroundColor: colors.surface,
+      borderRadius: 16,
+      padding: 20,
+    },
     rulesTitle: { fontSize: 19, fontFamily: fonts.title, color: colors.text, marginBottom: 12 },
-    // Both flex: 1 and maxHeight on the ScrollView itself proved unreliable
-    // here: flex: 1 collapses to zero height inside a parent whose own
-    // height is only capped (rulesCard's maxHeight) rather than fixed --
-    // RN's layout engine needs a definite parent size to grow into. A plain
-    // numeric `height` (set inline above, as a fraction of window height so
-    // it scales across phone/tablet sizes) isn't a clamp or a
-    // grow-to-fill -- it's an unambiguous size the ScrollView always gets,
-    // which is what actually guarantees the internal scroll gesture works
-    // regardless of platform, unlike maxHeight on a ScrollView's own style.
-    rulesScroll: {},
+    rulesScroll: { flex: 1 },
+    rulesScrollContent: { paddingBottom: 4 },
     rulesSectionHeading: { fontSize: 13, fontWeight: '700', color: colors.primary, marginTop: 14 },
     rulesText: { fontSize: 13, color: colors.textSecondary, marginTop: 6, lineHeight: 19 },
     rulesCloseBtn: { marginTop: 16, backgroundColor: colors.primary, borderRadius: 10, paddingVertical: 12, alignItems: 'center' },
