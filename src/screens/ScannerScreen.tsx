@@ -98,15 +98,14 @@ function easternDateString(d: Date = new Date()): string {
 const PRICING_CUTOFF = '2026-09-17';
 const REPEAT_CUTOFF = '2026-09-18';
 
-// Points for the Nth scan of the same person: 1st is 10 (20 during a
-// double-points window), 2nd and 3rd are flat regardless of double points —
-// except strictly before the conference starts, where every scan is flat
-// 10 (see PRICING_CUTOFF above).
+// Points for the Nth scan of the same person: 1st is 10, 2nd is 15, 3rd is
+// 20 — doubled during a double-points window (so 20/30/40) — except
+// strictly before the conference starts, where every scan is flat 10 (see
+// PRICING_CUTOFF above) regardless of any window.
 function pointsForScanNumber(n: number, doublePointsActive: boolean, todayEt: string): number {
   if (todayEt <= PRICING_CUTOFF) return 10;
-  if (n === 1) return doublePointsActive ? 20 : 10;
-  if (n === 2) return 15;
-  return 20;
+  const base = n === 1 ? 10 : n === 2 ? 15 : 20;
+  return doublePointsActive ? base * 2 : base;
 }
 
 export function ScannerScreen() {
@@ -482,8 +481,8 @@ export function ScannerScreen() {
                 )}
                 {!scanBlocked && !profileMissing && (
                   <Text style={styles.pointsHint}>
-                    {priorScanCount === 0 && doublePointsActive && todayEt > PRICING_CUTOFF
-                      ? '🔥 +20 pts for both of you (2x active!)'
+                    {doublePointsActive && todayEt > PRICING_CUTOFF
+                      ? `🔥 +${nextScanPoints} pts for both of you (2x active!)`
                       : `+${nextScanPoints} pts for both of you`}
                   </Text>
                 )}
