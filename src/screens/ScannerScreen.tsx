@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   Alert,
   Modal,
-  Platform,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -149,29 +148,6 @@ export function ScannerScreen() {
       requestPermission();
     }
   }, [permission, requestPermission]);
-
-  // iOS-only workaround for a known expo-camera black-screen bug: when
-  // permission is already granted at mount (every launch after the
-  // first-ever grant -- CameraView renders immediately instead of a beat
-  // after the permission prompt), the native AVCaptureSession can come up
-  // without ever starting to stream frames. A full remount "fixed" this
-  // once before by making the camera unusable outright (reverted -- see
-  // git history), because it refired on every foreground transition and
-  // fought the hardware. This instead toggles the `active` prop, which
-  // pauses/resumes the existing session without tearing down the native
-  // view, and only runs once per mount right as the camera becomes
-  // available -- not on every app-foreground -- so it can't repeat that
-  // regression.
-  const [cameraActive, setCameraActive] = useState(true);
-  useEffect(() => {
-    if (Platform.OS !== 'ios' || !permission?.granted) return;
-    const offTimer = setTimeout(() => setCameraActive(false), 400);
-    const onTimer = setTimeout(() => setCameraActive(true), 600);
-    return () => {
-      clearTimeout(offTimer);
-      clearTimeout(onTimer);
-    };
-  }, [permission?.granted]);
 
   // Live-updates the "waiting..." state once the target accepts/declines.
   // Scoped to this one request's own row (id=eq.<id>), not a broadcast to
@@ -427,9 +403,18 @@ export function ScannerScreen() {
     return (
       <View style={styles.permissionContainer}>
         <Text style={styles.permissionText}>Camera access is needed to scan QR codes.</Text>
-        <TouchableOpacity style={styles.button} onPress={requestPermission}>
-          <Text style={styles.buttonText}>Grant camera access</Text>
-        </TouchableOpacity>
+        {permission.canAskAgain ? (
+          <TouchableOpacity style={styles.button} onPress={requestPermission}>
+            <Text style={styles.buttonText}>Grant camera access</Text>
+          </TouchableOpacity>
+        ) : (
+          // Once denied, iOS/Android won't show the system prompt again --
+          // requestPermission() would just silently no-op here. Only path
+          // back is the OS Settings app.
+          <Text style={styles.permissionText}>
+            Camera access is disabled. Enable Camera for this app in Settings.
+          </Text>
+        )}
       </View>
     );
   }
@@ -440,7 +425,6 @@ export function ScannerScreen() {
         style={StyleSheet.absoluteFill}
         facing="back"
         autofocus="on"
-        active={cameraActive}
         barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
         // handleBarCode itself checks lockRef.current and bails — gating
         // this prop on the same ref was redundant and actually the bug:
@@ -464,7 +448,7 @@ export function ScannerScreen() {
           <View style={styles.backButton} />
         </View>
       </SafeAreaView>
-      <View style={styles.overlay}>
+      <View style={styles.overlay} pointerEvents="none">
         <View style={styles.reticle} />
         <Text style={styles.overlayText}>Point at a QR code</Text>
       </View>
