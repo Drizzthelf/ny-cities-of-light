@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { AppState } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { clearAllCaches, readCache, writeCache } from '../lib/offlineCache';
@@ -121,7 +122,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   async function signOut() {
-    await supabase.auth.signOut();
+    // supabase-js only clears the *local* session after its network call
+    // to revoke the session server-side succeeds -- offline, that call
+    // fails (or hangs) and the local session is left untouched, silently
+    // leaving the user signed in. Race it, and on failure/timeout force the
+    // local sign-out ourselves: remove the same storage key gotrue-js would
+    // have removed had the network call gone through, then update state
+    // directly since the SIGNED_OUT event never fires in that case.
+    const result = await withTimeout(() => supabase.auth.signOut(), AUTH_TIMEOUT_MS);
+    if (result === 'timeout' || result.error) {
+      const storageKey = (supabase.auth as unknown as { storageKey?: string }).storageKey;
+      if (storageKey) await AsyncStorage.removeItem(storageKey);
+      setSession(null);
+      setProfile(null);
+    }
     setPendingRegistrationCode(null);
     // So a different account signing in on this same device afterward can
     // never see this account's cached Home/Schedule/Contacts/Announcements
