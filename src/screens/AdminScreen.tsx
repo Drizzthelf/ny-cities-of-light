@@ -841,7 +841,7 @@ function RaffleSection() {
             <View style={styles.rowActions}>
               {!item.drawn_at && (
                 <TouchableOpacity
-                  style={styles.actionBtn}
+                  style={[styles.actionBtn, styles.actionBtnCentered]}
                   onPress={() => confirmDraw(item)}
                   disabled={drawing === item.id}
                 >
@@ -850,17 +850,20 @@ function RaffleSection() {
               )}
               {item.drawn_at && (
                 <TouchableOpacity
-                  style={styles.actionBtn}
+                  style={[styles.actionBtn, styles.actionBtnCentered]}
                   onPress={() => confirmRedraw(item)}
                   disabled={drawing === item.id}
                 >
                   <Text style={styles.actionBtnText}>{drawing === item.id ? '...' : 'Redraw'}</Text>
                 </TouchableOpacity>
               )}
-              <TouchableOpacity style={styles.actionBtn} onPress={() => setEditing(item)}>
+              <TouchableOpacity style={[styles.actionBtn, styles.actionBtnCentered]} onPress={() => setEditing(item)}>
                 <Text style={styles.actionBtnText}>Edit</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.actionBtn, styles.deleteBtn]} onPress={() => confirmDelete(item)}>
+              <TouchableOpacity
+                style={[styles.actionBtn, styles.deleteBtn, styles.actionBtnCentered]}
+                onPress={() => confirmDelete(item)}
+              >
                 <Text style={[styles.actionBtnText, styles.deleteBtnText]}>Del</Text>
               </TouchableOpacity>
             </View>
@@ -1498,6 +1501,12 @@ function getStyles(colors: ColorScheme) {
   activeBadge: { backgroundColor: colors.highlightTint, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 },
   activeBadgeText: { color: colors.highlightText, fontSize: 10, fontWeight: '700' },
   actionBtn: { paddingVertical: 5, paddingHorizontal: 10, borderRadius: 7, backgroundColor: colors.primary },
+  // rowActions stacks these buttons in a column with the default stretch
+  // cross-axis alignment, so they're all already the same width (matching
+  // the widest label, "Redraw") -- only the text inside needs centering,
+  // not the boxes themselves. Scoped to the Raffle tab's Draw/Redraw/Edit/
+  // Del row only, since actionBtn is shared with every other admin tab.
+  actionBtnCentered: { alignItems: 'center' },
   deleteBtn: { backgroundColor: colors.dangerTint },
   actionBtnText: { color: '#fff', fontSize: 12, fontWeight: '600' },
   deleteBtnText: { color: colors.danger },
