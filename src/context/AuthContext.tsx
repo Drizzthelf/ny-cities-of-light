@@ -4,7 +4,17 @@ import type { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { clearAllCaches, readCache, writeCache } from '../lib/offlineCache';
 import { clearAllQueues } from '../lib/offlineQueue';
+import { withTimeout } from '../lib/withRetry';
 import type { Profile } from '../types/database';
+
+// Bounds how long startup/resume will wait on getSession + loadProfile
+// before giving up and falling back to cache (or, for getSession, just
+// clearing `loading` with whatever's already in state). Without this, a
+// genuinely offline device could leave loading stuck true forever instead
+// of landing on MainTabs with the last cached profile -- the same
+// "hangs, doesn't just error" failure ScannerScreen.tsx's SEND_TIMEOUT_MS
+// fixes for sending a request.
+const AUTH_TIMEOUT_MS = 8 * 1000;
 
 type AuthState = {
   session: Session | null;
@@ -35,23 +45,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [pendingRegistrationCode, setPendingRegistrationCode] = useState<string | null>(null);
 
   async function loadProfile(userId: string) {
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('*, profile_socials(*)')
-      .eq('id', userId)
-      .maybeSingle();
-    if (error) {
-      // A network/server failure looks identical to "no row found" here
-      // (both come back as data: null) — without this branch, losing
-      // connectivity bounced a fully set-up user straight to the
-      // create-profile screen, since RootNavigator treats profile === null
-      // as "never finished onboarding." Fall back to the last known-good
-      // profile instead; only an actual successful "no such row" result
-      // (below) should ever be treated as a genuinely new account.
+    const result = await withTimeout(
+      () => supabase.from('profiles').select('*, profile_socials(*)').eq('id', userId).maybeSingle(),
+      AUTH_TIMEOUT_MS
+    );
+    if (result === 'timeout' || result.error) {
+      // A network/server failure (including a fetch that never resolved at
+      // all) looks identical to "no row found" here (both come back as
+      // data: null) — without this branch, losing connectivity bounced a
+      // fully set-up user straight to the create-profile screen, since
+      // RootNavigator treats profile === null as "never finished
+      // onboarding." Fall back to the last known-good profile instead; only
+      // an actual successful "no such row" result (below) should ever be
+      // treated as a genuinely new account.
       const cached = await readCache<Profile>('profile', userId);
       if (cached) setProfile(cached.data);
       return;
     }
+    const { data } = result;
     setProfile((data as Profile | null) ?? null);
     if (data) writeCache<Profile>('profile', userId, data as Profile);
   }
@@ -61,7 +72,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // not just once at startup.
   async function checkInitialSession() {
     setLoading(true);
-    const { data } = await supabase.auth.getSession();
+    const result = await withTimeout(() => supabase.auth.getSession(), AUTH_TIMEOUT_MS);
+    if (result === 'timeout') {
+      // getSession() reads local storage and should resolve near-instantly
+      // even offline, but nothing stops this from hanging the same way the
+      // profile fetch below did -- bail rather than leave loading stuck.
+      setLoading(false);
+      return;
+    }
+    const { data } = result;
     setSession(data.session);
     if (data.session?.user) await loadProfile(data.session.user.id);
     setLoading(false);

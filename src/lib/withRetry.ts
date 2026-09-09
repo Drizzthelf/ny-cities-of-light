@@ -20,6 +20,19 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// A fully offline device doesn't always make a Supabase call fail fast —
+// sometimes the underlying fetch just hangs with no native-level timeout,
+// which defeats withRetry too (it can't retry a call that never resolves
+// or rejects). Races the call against a plain timer so a caller always
+// gets an answer within `ms`, even if the loser promise keeps running
+// unseen in the background. Same technique ScannerScreen.tsx uses inline
+// for handleSendRequest; exported here for AuthContext.tsx's startup
+// session/profile load, which hit the identical "hangs forever" failure.
+export function withTimeout<T>(fn: () => PromiseLike<T>, ms: number): Promise<T | 'timeout'> {
+  const timedOut = new Promise<'timeout'>((resolve) => setTimeout(() => resolve('timeout'), ms));
+  return Promise.race([Promise.resolve(fn()), timedOut]);
+}
+
 // Wraps a Supabase call with bounded exponential backoff + jitter, so a
 // burst of simultaneous scan-insert/check-in/profile-fetch calls at event
 // start degrades gracefully instead of surfacing a raw network error on the
