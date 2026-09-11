@@ -621,8 +621,12 @@ today. Concrete mitigations, in the order they're likely needed:
       whether it's linked to identity and used for tracking (it isn't —
       no ads/analytics SDKs in the dependency list; keep it that way or
       re-declare if that changes).
-- [ ] **Privacy Policy URL** — required in App Store Connect metadata; use
-      the client's draft once finalized (§7).
+- [ ] **Privacy Policy URL** — required in App Store Connect metadata. The
+      client's policy is finalized now (§7):
+      `https://github.com/Drizzthelf/ny-cities-of-light/blob/main/privacy-policy.txt`.
+      Still unconfirmed whether this has actually been entered into App
+      Store Connect's Privacy Policy field — check before the next iOS
+      submission.
 - [x] **Account deletion built (2026-08-17)**, satisfying Apple Guideline
       5.1.1(v): `supabase/functions/delete-account` (the project's first
       Edge Function) verifies the caller's own JWT, then uses `service_role`
@@ -696,26 +700,36 @@ today. Concrete mitigations, in the order they're likely needed:
       at time of submission.
 - [ ] Declare the `CAMERA` permission's purpose in Play Console (already
       declared in `app.json`'s `android.permissions`).
-- [ ] Same **Privacy Policy URL** requirement as Apple.
+- [x] Same **Privacy Policy URL** requirement as Apple — resolved
+      (2026-09-11): `https://github.com/Drizzthelf/ny-cities-of-light/blob/main/privacy-policy.txt`.
+      Confirm this same URL is also filled into App Store Connect's
+      Privacy Policy field, since that gap was never explicitly closed
+      for Apple either.
 - [ ] Use a **closed/internal testing track** before promoting to production.
 - [ ] Build via **EAS Build** for Android (AAB format) — same pipeline as
       iOS.
 
 ## 7. Legal / privacy documentation
 
-- [ ] **Incorporate the client's draft Privacy Policy and draft Code of
-      Conduct / Acceptable Use Policy** — referenced in their review email
-      but not actually attached to the message text received here. Get the
-      actual documents (files or pasted text) and drop them into
-      `docs/privacy-policy.md` and `docs/code-of-conduct.md`, then revise
-      for tone as invited. Until then, treat §5/§6's Privacy Policy URL and
-      §3.6's code-of-conduct screen as blocked on receiving these.
-- [ ] Once drafted/finalized, the Privacy Policy needs to explicitly cover:
-      data collected (name, email, photo, hometown/background,
-      questions submitted to admin), that email is used both for login and
-      (if the allow-list ships) for Eventbrite-registration matching per
-      §3.3, that profile content is unverified, and the retention/deletion
-      policy below.
+- [x] **Incorporate the client's draft Privacy Policy** — done
+      (2026-09-11): landed at repo root as `privacy-policy.txt` (not
+      `docs/privacy-policy.md` as originally planned here), publicly
+      linkable at `https://github.com/Drizzthelf/ny-cities-of-light/blob/main/privacy-policy.txt`
+      — see §6. Note the policy text refers to the app as "Constellations,"
+      not "NY Cities of Light"/"QR Meetup" — worth reconciling naming with
+      the client, or leaving as-is if that's the client's intended public
+      name.
+- [ ] **Incorporate the client's draft Code of Conduct / Acceptable Use
+      Policy** — still not received/attached anywhere. §3.6's
+      code-of-conduct-acknowledgment screen stays blocked on this.
+- [x] Reconciled against what the app actually collects (2026-09-11): the
+      finalized policy covers name/email/photo/social handles, report
+      content, and scan/check-in/raffle activity data, plus a 30-day
+      post-conference retention window and in-app deletion. The original
+      "hometown/background" field and Eventbrite-matching use of email
+      named here were never built (Eventbrite sync was shelved, §8) — this
+      item was written against a plan that changed, not a real gap in the
+      policy as shipped.
 - [ ] Write down the **data retention policy** explicitly now that this is a
       recurring/real app rather than a one-off demo: does data get wiped
       after each event, kept for repeat attendees across events, or
