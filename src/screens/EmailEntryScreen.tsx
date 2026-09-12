@@ -12,6 +12,7 @@ import { supabase } from '../lib/supabase';
 import { HCaptchaModal, HCAPTCHA_ENABLED } from '../components/HCaptchaModal';
 import { useTheme } from '../context/ThemeContext';
 import { fonts, type ColorScheme } from '../theme';
+import { TEST_ACCOUNT_EMAIL } from '../lib/testAccount';
 
 type Props = {
   onCodeSent: (email: string) => void;
@@ -42,6 +43,12 @@ export function EmailEntryScreen({ onCodeSent }: Props) {
     const normalized = email.trim().toLowerCase();
     if (!normalized.includes('@')) {
       Alert.alert('Invalid email', 'Enter a valid email address.');
+      return;
+    }
+    // App Review demo account: no real OTP is ever sent for this address —
+    // OtpVerifyScreen verifies its fixed code against the server instead.
+    if (normalized === TEST_ACCOUNT_EMAIL) {
+      onCodeSent(normalized);
       return;
     }
     if (HCAPTCHA_ENABLED) {

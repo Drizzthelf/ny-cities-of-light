@@ -11,6 +11,7 @@ import {
 import { supabase } from '../lib/supabase';
 import { useTheme } from '../context/ThemeContext';
 import { fonts, type ColorScheme } from '../theme';
+import { TEST_ACCOUNT_EMAIL } from '../lib/testAccount';
 
 type Props = {
   email: string;
@@ -29,6 +30,32 @@ export function OtpVerifyScreen({ email, onBack }: Props) {
       return;
     }
     setVerifying(true);
+
+    // App Review demo account: the code is checked server-side (with
+    // brute-force lockout) by verify-test-account, not by GoTrue, since
+    // GoTrue never sent a real OTP to this address in the first place.
+    if (email === TEST_ACCOUNT_EMAIL) {
+      const { data, error } = await supabase.functions.invoke<{
+        access_token: string;
+        refresh_token: string;
+      }>('verify-test-account', { body: { email, code } });
+      if (error || !data?.access_token || !data?.refresh_token) {
+        setVerifying(false);
+        Alert.alert('Verification failed', 'Incorrect code.');
+        return;
+      }
+      const { error: sessionError } = await supabase.auth.setSession({
+        access_token: data.access_token,
+        refresh_token: data.refresh_token,
+      });
+      setVerifying(false);
+      if (sessionError) {
+        Alert.alert('Verification failed', sessionError.message);
+      }
+      // AuthContext listens to auth state changes and will route us forward.
+      return;
+    }
+
     const { error } = await supabase.auth.verifyOtp({ email, token: code, type: 'email' });
     setVerifying(false);
     if (error) {
