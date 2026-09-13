@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "476349497023",
+    "project_id": "nyc-ysa-cities-of-light",
+    "storage_bucket": "nyc-ysa-cities-of-light.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:476349497023:android:bb115f2846ef9b63cf500a",
+        "android_client_info": {
+          "package_name": "com.ja123yu.nycitiesoflight"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD_RB0N_Zr2bAz3sEtEc9VJeL8Z4-IlMT4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

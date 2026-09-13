@@ -43,6 +43,12 @@ yarn-error.*
 # personal notes / secrets (never commit)
 variable.txt
 
+# Firebase service account key (FCM V1 push credentials) — uploaded directly
+# to EAS, must never be committed. google-services.json is separate and
+# safe to commit (public-facing identifiers only).
+Firebase key.json
+*firebase-adminsdk*.json
+
 # typescript
 *.tsbuildinfo
 
