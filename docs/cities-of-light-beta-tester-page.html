@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cities of Light Beta</title>
+<meta name="description" content="Join the NYC YSA tester group and get the Android or iOS beta link for Cities of Light.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>💡</text></svg>">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;1,9..144,500;1,9..144,600&family=Manrope:wght@400;600;700;800&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+  :root {
+    --bg: #0B0B0D;
+    --surface: #1A1A1D;
+    --surface-2: #141416;
+    --border: #302F34;
+    --text: #F2F2F0;
+    --muted: #98989F;
+    --accent: #3B82F6;
+    --accent-ink: #FFFFFF;
+    --android: #34C759;
+    --android-ink: #04180C;
+    --apple: #3B82F6;
+    --apple-ink: #FFFFFF;
+    --shadow: 0 1px 2px rgba(0,0,0,0.4), 0 10px 28px rgba(0,0,0,0.45);
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body { margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    padding: 0 20px;
+    padding-block: 40px 56px;
+  }
+
+  img { max-width: 100%; }
+
+  .page {
+    max-width: 560px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 34px;
+  }
+
+  .hero { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; }
+
+  .spark {
+    color: var(--accent);
+    font-size: 20px;
+    line-height: 1;
+    margin-bottom: 4px;
+  }
+
+  h1 {
+    font-family: 'Manrope', -apple-system, sans-serif;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.01em;
+    font-size: clamp(2rem, 8vw, 2.6rem);
+    line-height: 1.05;
+    margin: 0;
+    color: var(--text);
+    text-wrap: balance;
+  }
+
+  .eyebrow {
+    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+    font-size: 11.5px;
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 2px 0 0;
+  }
+
+  .sub {
+    color: var(--muted);
+    font-size: 15.5px;
+    line-height: 1.5;
+    margin: 6px auto 0;
+    max-width: 40ch;
+    text-wrap: balance;
+  }
+
+  .platform {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .platform-tag {
+    align-self: center;
+    padding: 8px 20px;
+    border-radius: 10px;
+    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+    font-weight: 600;
+    font-size: 15px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    text-align: center;
+  }
+
+  .platform-android { --p: var(--android); --p-ink: var(--android-ink); }
+  .platform-apple { --p: var(--apple); --p-ink: var(--apple-ink); }
+
+  .platform-tag { background: var(--p); color: var(--p-ink); }
+
+  .steps {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .step {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    box-shadow: var(--shadow);
+    padding: 22px;
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 16px;
+    align-items: start;
+  }
+
+  .step-num {
+    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+    font-weight: 600;
+    font-size: 13px;
+    color: var(--p-ink);
+    background: var(--p);
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+  }
+
+  .step-body { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+
+  .step h2 {
+    font-family: 'Fraunces', Georgia, serif;
+    font-style: italic;
+    font-weight: 600;
+    font-variation-settings: "SOFT" 0, "WONK" 0;
+    font-size: 19px;
+    margin: 0;
+    color: var(--text);
+  }
+
+  .step p {
+    color: var(--muted);
+    font-size: 14.5px;
+    line-height: 1.5;
+    margin: 0;
+  }
+
+  .btn {
+    align-self: flex-start;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 4px;
+    padding: 11px 18px;
+    border-radius: 12px;
+    font-family: 'Manrope', sans-serif;
+    font-weight: 700;
+    font-size: 14.5px;
+    text-decoration: none;
+    border: 1px solid transparent;
+    transition: opacity 0.15s ease;
+  }
+
+  .btn:hover { opacity: 0.88; }
+  .btn:focus-visible { outline: 2px solid var(--p); outline-offset: 2px; }
+
+  .btn-primary { background: var(--p); color: var(--p-ink); }
+
+  .btn-secondary {
+    background: transparent;
+    color: var(--p);
+    border-color: var(--p);
+  }
+
+  .hint {
+    color: var(--muted);
+    font-size: 13.5px;
+    line-height: 1.5;
+    margin: 0;
+  }
+
+  .share {
+    border-top: 1px solid var(--border);
+    padding-top: 28px;
+    display: flex;
+    gap: 20px;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+  }
+
+  .share-text { flex: 1 1 240px; min-width: 0; }
+
+  .share h3 {
+    font-family: 'Fraunces', Georgia, serif;
+    font-style: italic;
+    font-weight: 600;
+    font-variation-settings: "SOFT" 0, "WONK" 0;
+    font-size: 16px;
+    margin: 0 0 6px;
+    color: var(--text);
+  }
+
+  .share p {
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.5;
+    margin: 0 0 8px;
+  }
+
+  .url {
+    display: block;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 11.5px;
+    color: var(--accent);
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 10px;
+    word-break: break-all;
+    line-height: 1.4;
+  }
+
+  .qr {
+    flex: none;
+    width: 132px;
+    height: 132px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    padding: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: var(--shadow);
+  }
+
+  .qr > div {
+    background: #ffffff;
+    border-radius: 8px;
+    padding: 6px;
+    display: flex;
+  }
+
+  .qr img { display: block; width: 100%; height: 100%; }
+</style>
+</head>
+<body>
+
+<div class="page">
+  <header class="hero">
+    <div class="spark" aria-hidden="true">✦</div>
+    <h1>Cities of Light</h1>
+    <p class="eyebrow">— Beta Tester Setup —</p>
+    <p class="sub">Pick your device below — you'll be set up as a tester in a minute.</p>
+  </header>
+
+  <section class="platform platform-android">
+    <div class="platform-tag">Android</div>
+    <ol class="steps">
+      <li class="step">
+        <div class="step-num">01</div>
+        <div class="step-body">
+          <h2>Join the tester group</h2>
+          <p>Sign in with a Google account, open the group page, and tap "Join group" (or "Ask to join," if it needs approval) near the top — this is what Google uses to verify you as an approved tester.</p>
+          <a class="btn btn-primary" href="https://groups.google.com/g/nyc-ysa-cities-of-light-qr-app" target="_blank" rel="noopener">Open the group</a>
+        </div>
+      </li>
+      <li class="step">
+        <div class="step-num">02</div>
+        <div class="step-body">
+          <h2>Get the testing link</h2>
+          <p>Once you've joined, open this thread for the Android External Test link to install the app.</p>
+          <a class="btn btn-secondary" href="https://groups.google.com/g/nyc-ysa-cities-of-light-qr-app/c/nu6IRF-buBs" target="_blank" rel="noopener">Get the testing link</a>
+        </div>
+      </li>
+    </ol>
+    <p class="hint">If step 2 says you don't have access yet, finish step 1 first — joining can take a minute to register.</p>
+  </section>
+
+  <section class="platform platform-apple">
+    <div class="platform-tag">iPhone &amp; iPad</div>
+    <ol class="steps">
+      <li class="step">
+        <div class="step-num">01</div>
+        <div class="step-body">
+          <h2>Join the TestFlight beta</h2>
+          <p>Tap below to open the TestFlight invite. First time using TestFlight? The link sends you to the App Store to install it — once it's installed, tap the link again to accept the invite and install Cities of Light.</p>
+          <a class="btn btn-primary" href="https://testflight.apple.com/join/S9zefVw3" target="_blank" rel="noopener">Open in TestFlight</a>
+        </div>
+      </li>
+    </ol>
+  </section>
+
+  <footer class="share">
+    <div class="share-text">
+      <h3>Sharing this with someone else?</h3>
+      <p>They can scan this code, or copy the link, to land on this same page.</p>
+      <code id="page-url" class="url">loading…</code>
+    </div>
+    <div class="qr" aria-label="QR code linking to this page"><div id="qr"></div></div>
+  </footer>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+<script>
+  try {
+    var pageUrl = window.location.href;
+    var urlEl = document.getElementById('page-url');
+    if (urlEl) urlEl.textContent = pageUrl;
+    if (window.QRCode) {
+      new QRCode(document.getElementById('qr'), {
+        text: pageUrl,
+        width: 106,
+        height: 106,
+        colorDark: '#0B0B0D',
+        colorLight: '#ffffff',
+        correctLevel: QRCode.CorrectLevel.M
+      });
+    }
+  } catch (e) {}
+</script>
+</body>
+</html>
