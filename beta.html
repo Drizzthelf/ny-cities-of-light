@@ -21,6 +21,12 @@
     --android-ink: #04180C;
     --apple: #3B82F6;
     --apple-ink: #FFFFFF;
+    /* Warm gold, not blue/green — echoes the app's own "light" motif
+       (the star on the app icon) and keeps this section visually
+       distinct from the Apple section below, which was accidentally
+       sharing --accent's exact blue. */
+    --setup: #F2A93B;
+    --setup-ink: #241600;
     --shadow: 0 1px 2px rgba(0,0,0,0.4), 0 10px 28px rgba(0,0,0,0.45);
     color-scheme: dark;
   }
@@ -107,7 +113,7 @@
 
   .platform-android { --p: var(--android); --p-ink: var(--android-ink); }
   .platform-apple { --p: var(--apple); --p-ink: var(--apple-ink); }
-  .platform-account { --p: var(--accent); --p-ink: var(--accent-ink); }
+  .platform-account { --p: var(--setup); --p-ink: var(--setup-ink); }
 
   .platform-tag { background: var(--p); color: var(--p-ink); }
 
