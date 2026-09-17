@@ -81,7 +81,12 @@ function getStyles(colors: ColorScheme) {
     // description could get clipped by the card's maxHeight with no way
     // to actually scroll to the rest — same root cause as the Guideline 4
     // fix elsewhere, just inside a bottom sheet instead of a full screen.
-    scrollFlex: { flexShrink: 1 },
+    // minHeight: 0 is the other half of that fix — like web flexbox, Yoga
+    // defaults a flex item's minimum size to its content size, so
+    // flexShrink alone still refused to shrink below the full description's
+    // height and the ScrollView never actually became scrollable; this
+    // removes that floor.
+    scrollFlex: { flexShrink: 1, minHeight: 0 },
     scroll: { padding: 24 },
     photo: { width: '100%', height: 180, borderRadius: 14, marginBottom: 16, backgroundColor: colors.borderLight },
     // Plain bold sans, not fonts.title (PlayfairDisplay italic) — matches
