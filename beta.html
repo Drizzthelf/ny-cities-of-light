@@ -100,22 +100,21 @@
   }
 
   .platform-tag {
-    align-self: center;
-    padding: 8px 20px;
-    border-radius: 10px;
-    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+    align-self: flex-start;
+    font-family: 'Fraunces', Georgia, serif;
+    font-style: italic;
     font-weight: 600;
-    font-size: 15px;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    text-align: center;
+    font-variation-settings: "SOFT" 0, "WONK" 0;
+    font-size: 21px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid var(--p);
   }
 
   .platform-android { --p: var(--android); --p-ink: var(--android-ink); }
   .platform-apple { --p: var(--apple); --p-ink: var(--apple-ink); }
   .platform-account { --p: var(--setup); --p-ink: var(--setup-ink); }
 
-  .platform-tag { background: var(--p); color: var(--p-ink); }
+  .platform-tag { color: var(--p); }
 
   .code {
     align-self: flex-start;
