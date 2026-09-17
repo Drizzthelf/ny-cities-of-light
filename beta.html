@@ -107,8 +107,21 @@
 
   .platform-android { --p: var(--android); --p-ink: var(--android-ink); }
   .platform-apple { --p: var(--apple); --p-ink: var(--apple-ink); }
+  .platform-account { --p: var(--accent); --p-ink: var(--accent-ink); }
 
   .platform-tag { background: var(--p); color: var(--p-ink); }
+
+  .code {
+    align-self: flex-start;
+    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    color: var(--p-ink);
+    background: var(--p);
+    border-radius: 8px;
+    padding: 8px 14px;
+  }
 
   .steps {
     list-style: none;
@@ -274,6 +287,41 @@
     <p class="eyebrow">— Beta Tester Setup —</p>
     <p class="sub">Pick your device below — you'll be set up as a tester in a minute.</p>
   </header>
+
+  <section class="platform platform-account">
+    <div class="platform-tag">Set Up Your Account</div>
+    <ol class="steps">
+      <li class="step">
+        <div class="step-num">01</div>
+        <div class="step-body">
+          <h2>Enter the registration code</h2>
+          <p>The first time you open the app, it asks for a registration code to confirm you're part of the conference. Enter:</p>
+          <code class="code">NYCYSACONF</code>
+        </div>
+      </li>
+      <li class="step">
+        <div class="step-num">02</div>
+        <div class="step-body">
+          <h2>Sign in with your email</h2>
+          <p>No password needed — enter your email address and the app sends you a one-time sign-in code.</p>
+        </div>
+      </li>
+      <li class="step">
+        <div class="step-num">03</div>
+        <div class="step-body">
+          <h2>Enter the code from your email</h2>
+          <p>Check your inbox for a 6-digit code and enter it in the app to finish signing in.</p>
+        </div>
+      </li>
+      <li class="step">
+        <div class="step-num">04</div>
+        <div class="step-body">
+          <h2>Set up your profile</h2>
+          <p>Add your first name (required), and a photo or social handles if you'd like — this is what other attendees see when they scan your QR code.</p>
+        </div>
+      </li>
+    </ol>
+  </section>
 
   <section class="platform platform-android">
     <div class="platform-tag">Android</div>
